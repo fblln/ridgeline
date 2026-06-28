@@ -75,12 +75,11 @@ The web mesh can be denser than some source cells, but it cannot invent
 real-world detail beyond the underlying DEM. Where the source is Piemonte DTM,
 the true elevation source is still 5 m.
 
-## Current App Experience
+## App Experience
 
 The app starts with a compact entry surface for search, coordinates, or GPX
 import. Search and coordinate loading open the generated sample area after the
-asset baker has written it locally; GPX import uses the real local worker
-pipeline.
+asset baker has written it locally; GPX import uses the real local worker pipeline.
 
 ![Ridgeline entry screen](docs/images/readme/entry.png)
 
@@ -90,16 +89,6 @@ fetching, route/terrain sampling, texture baking, relief/slope rendering, forest
 layer generation, and final asset handoff.
 
 ![Ridgeline GPX import progress](docs/images/readme/import-progress.png)
-
-The viewer is designed as a workbench rather than a flight simulator. The right
-rail controls map layers, vertical exaggeration, and route visibility. The
-bottom camera toolbar switches between orbit, free camera, and route-follow
-preview.
-
-![Ridgeline route replay](docs/images/readme/route-replay.gif)
-
-*Route-follow mode scrubs along the GPX track and keeps the camera near the
-terrain, previewing a future authored replay workflow.*
 
 ### Terrain Layers
 
