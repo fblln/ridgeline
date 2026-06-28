@@ -24,9 +24,9 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
-import type { CameraMode, CameraSnapshot, SavedShot, TextureMode, ViewerState, ViewMode } from "../types";
 import { formatMinutes } from "../app/routeTime";
 import { cameraLabels, layerShort, mapLayers } from "../app/viewerLabels";
+import type { CameraMode, CameraSnapshot, SavedShot, TextureMode, ViewerState, ViewMode } from "../types";
 
 export function LoadingOverlay() {
   // Asset fetches do not expose byte-level progress, so this keeps loading visibly active.
@@ -312,7 +312,9 @@ export function ShotPanel({
             </div>
             <div>
               <strong>{shot.name}</strong>
-              <span>FOV {shot.fov}° · {layerShort(shot.textureMode)}</span>
+              <span>
+                FOV {shot.fov}° · {layerShort(shot.textureMode)}
+              </span>
             </div>
           </button>
         ))}
@@ -415,20 +417,18 @@ export function ReplayTimeline({
   );
 }
 
-export function ExportPreview({
-  imageUrl,
-  onClose,
-}: {
-  imageUrl: string;
-  onClose: () => void;
-}) {
+export function ExportPreview({ imageUrl, onClose }: { imageUrl: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="export-scrim" onClick={onClose}>
-      <aside
-        className="export-preview glass-panel"
-        aria-label="Captured image preview"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <div className="export-scrim">
+      <aside className="export-preview glass-panel" role="dialog" aria-modal="true" aria-label="Captured image preview">
         <div className="panel-header compact">
           <div>
             <p className="eyebrow">Captured view · 7200×5400</p>

@@ -1,7 +1,7 @@
 // OpenTelemetry for the Vite dev API. Initialised once on import. Exports a
 // tracer plus helpers to (a) continue the browser's trace from request headers
 // and (b) hand the active span's context to the Python worker via TRACEPARENT.
-import { context, propagation, trace, type Context, type Span } from "@opentelemetry/api";
+import { type Context, context, propagation, type Span, trace } from "@opentelemetry/api";
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";

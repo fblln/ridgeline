@@ -104,4 +104,3 @@ export const terrainLightingPresets: Record<ViewerState["textureMode"], TerrainL
     material: { emissive: 0x181818, emissiveIntensity: 0.03 },
   },
 };
-

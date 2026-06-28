@@ -1,0 +1,4 @@
+# Dev/test tooling for the asset baker. Install on top of requirements.txt:
+#   pip install -r requirements.txt -r requirements-dev.txt
+pytest==9.1.1
+ruff==0.15.20

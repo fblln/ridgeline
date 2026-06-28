@@ -80,7 +80,11 @@ export function sharpenHeights(terrain: TerrainAsset, rows: number, cols: number
   return out;
 }
 
-export function buildTerrainGeometry(terrain: TerrainAsset, verticalExaggeration: number, quality: ViewerState["quality"]) {
+export function buildTerrainGeometry(
+  terrain: TerrainAsset,
+  verticalExaggeration: number,
+  quality: ViewerState["quality"],
+) {
   const skip = quality === "low" ? 4 : quality === "balanced" ? 2 : 1;
   const n = terrain.gridSize;
   const cols = Math.floor((n - 1) / skip) + 1;
@@ -184,4 +188,3 @@ export function buildBorderGroup(border: BorderAsset | null, terrain: TerrainAss
   }
   return group;
 }
-

@@ -2,15 +2,15 @@
  * Local GPX import job runner. It owns temporary upload paths, Python worker
  * lifecycle, progress parsing, and trace propagation into the asset baker.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Context, Span } from "@opentelemetry/api";
 import { SpanStatusCode } from "@opentelemetry/api";
 import type { ViteDevServer } from "vite";
 import { traceparentFor, tracer } from "../otel.node";
-import type { ImportJob, ImportQuality, UploadedGpx } from "./types";
 import { importJobId, lastErrorLine, qualityEnv, slugify, titleFromFilename } from "./importValidation";
+import type { ImportJob, ImportQuality, UploadedGpx } from "./types";
 
 const jobs = new Map<string, ImportJob>();
 const jobChildren = new Map<string, ChildProcess>();
@@ -56,11 +56,13 @@ export function queueImportJob({
     };
     jobs.set(jobId, job);
     const startedJob = job;
-    startJob({ server, job: startedJob, gpxText: upload.text, filename: upload.filename, parentContext }).catch((error: unknown) => {
-      startedJob.status = "error";
-      startedJob.error = error instanceof Error ? error.message : "Import failed.";
-      startedJob.step = "Import failed";
-    });
+    startJob({ server, job: startedJob, gpxText: upload.text, filename: upload.filename, parentContext }).catch(
+      (error: unknown) => {
+        startedJob.status = "error";
+        startedJob.error = error instanceof Error ? error.message : "Import failed.";
+        startedJob.step = "Import failed";
+      },
+    );
   }
   return job;
 }
@@ -90,7 +92,9 @@ async function startJob({
   await mkdir(outDir, { recursive: true });
   await writeFile(gpxPath, gpxText, "utf8");
 
-  const manifestExists = await readFile(manifestPath, "utf8").then(() => true).catch(() => false);
+  const manifestExists = await readFile(manifestPath, "utf8")
+    .then(() => true)
+    .catch(() => false);
   if (manifestExists) {
     job.status = "ready";
     job.progress = 100;
@@ -115,7 +119,9 @@ async function startJob({
 
   const jobSpan: Span = tracer.startSpan(
     "import-job",
-    { attributes: { "import.job_id": job.id, "import.quality": job.quality, "import.source": path.basename(filename) } },
+    {
+      attributes: { "import.job_id": job.id, "import.quality": job.quality, "import.source": path.basename(filename) },
+    },
     parentContext,
   );
   const traceparent = traceparentFor(jobSpan);
@@ -182,10 +188,14 @@ async function startJob({
     } else {
       const reason = lastErrorLine(logLines);
       job.status = "error";
-      job.error = reason ? `Asset generation failed: ${reason}` : `Asset generation failed (exit ${code ?? "unknown"}).`;
+      job.error = reason
+        ? `Asset generation failed: ${reason}`
+        : `Asset generation failed (exit ${code ?? "unknown"}).`;
       job.step = "Import failed";
       jobSpan.setStatus({ code: SpanStatusCode.ERROR, message: reason || `exit ${code}` });
-      console.warn(`[gpx-import] ${job.id} FAILED after ${seconds}s (exit ${code}) - ${filename}\n  ${reason}\n  full log: ${logPath}`);
+      console.warn(
+        `[gpx-import] ${job.id} FAILED after ${seconds}s (exit ${code}) - ${filename}\n  ${reason}\n  full log: ${logPath}`,
+      );
     }
     jobSpan.end();
   });

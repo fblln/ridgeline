@@ -14,9 +14,10 @@ export function buildRouteSampler(route: RouteAsset, points: THREE.Vector3[]): R
   for (let i = 1; i < points.length; i += 1) {
     const routeDistance = route.points[i]?.d;
     const fromRoute = typeof routeDistance === "number" ? routeDistance - firstRouteDistance : NaN;
-    distances[i] = Number.isFinite(fromRoute) && fromRoute > distances[i - 1]
-      ? fromRoute
-      : distances[i - 1] + points[i].distanceTo(points[i - 1]);
+    distances[i] =
+      Number.isFinite(fromRoute) && fromRoute > distances[i - 1]
+        ? fromRoute
+        : distances[i - 1] + points[i].distanceTo(points[i - 1]);
   }
   return {
     points,
@@ -59,11 +60,7 @@ export function clampFollowCameraPosition(subject: THREE.Vector3, position: THRE
   const offset = position.clone().sub(subject);
   const distance = offset.length();
   if (distance < 1) return position;
-  const clampedDistance = clamp(
-    distance,
-    routeFollowConfig.minCameraDistanceM,
-    routeFollowConfig.maxCameraDistanceM,
-  );
+  const clampedDistance = clamp(distance, routeFollowConfig.minCameraDistanceM, routeFollowConfig.maxCameraDistanceM);
   if (Math.abs(clampedDistance - distance) < 0.01) return position;
   return subject.clone().add(offset.multiplyScalar(clampedDistance / distance));
 }
@@ -139,4 +136,3 @@ export function sideOffsetForSightline(
   const strength = clamp(centerScore / 260, 0.25, 1);
   return bestOffset * strength;
 }
-

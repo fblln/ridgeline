@@ -1,26 +1,54 @@
-import { Loader2, Map, Mountain } from "lucide-react";
+import { Loader2, Map as MapIcon, Mountain } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { FXAAPass } from "three/examples/jsm/postprocessing/FXAAPass.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { SSAOPass } from "three/examples/jsm/postprocessing/SSAOPass.js";
-import type {
-  AppStatus,
-  BorderAsset,
-  RouteAsset,
-  SavedShot,
-  TerrainAsset,
-  ValleyManifest,
-  ViewerState,
-} from "./types";
-import { markerOverlayLayer, maxDisplayPixelRatio, routeFollowConfig, terrainLightingPresets, toRad } from "./viewer/constants";
-import { applyRig, classForStatus, clamp, computeRigFromCamera, dampingAlpha, distance2d, localToScene, sceneToLocal } from "./viewer/coordinates";
+import type { BorderAsset, RouteAsset, TerrainAsset, ValleyManifest } from "./types";
+import {
+  markerOverlayLayer,
+  maxDisplayPixelRatio,
+  routeFollowConfig,
+  terrainLightingPresets,
+  toRad,
+} from "./viewer/constants";
+import {
+  applyRig,
+  clamp,
+  classForStatus,
+  computeRigFromCamera,
+  dampingAlpha,
+  distance2d,
+  localToScene,
+  sceneToLocal,
+} from "./viewer/coordinates";
 import { buildBorderGroup, buildRouteObject, buildTerrainGeometry, createPointerTexture } from "./viewer/geometry";
-import { applyPostProcessingForTextureMode, applyTerrainLightingPreset, applyTerrainReliefPreset, configureColorTexture, configureReliefTexture, getTerrainLightingPreset, installTerrainReliefShader } from "./viewer/materials";
-import { clampFollowCameraPosition, routeHeadingAtDistance, sampleRouteDistance, sideOffsetForSightline } from "./viewer/routeFollow";
+import {
+  applyPostProcessingForTextureMode,
+  applyTerrainLightingPreset,
+  applyTerrainReliefPreset,
+  configureColorTexture,
+  configureReliefTexture,
+  getTerrainLightingPreset,
+  installTerrainReliefShader,
+} from "./viewer/materials";
 import { exportRendererImage, renderSceneWithMarkerOverlay } from "./viewer/rendering";
-import type { CameraRig, LoadedAssets, RenderPipeline, RouteFollowState, RouteSampler, TerrainLightingRig, TerrainViewerProps, ViewerCommand } from "./viewer/types";
+import {
+  clampFollowCameraPosition,
+  routeHeadingAtDistance,
+  sampleRouteDistance,
+  sideOffsetForSightline,
+} from "./viewer/routeFollow";
+import type {
+  CameraRig,
+  LoadedAssets,
+  RenderPipeline,
+  RouteFollowState,
+  RouteSampler,
+  TerrainLightingRig,
+  TerrainViewerProps,
+} from "./viewer/types";
 
 export function TerrainViewer({
   status,
@@ -65,10 +93,11 @@ export function TerrainViewer({
   const [assets, setAssets] = useState<LoadedAssets | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const assetBase = valley?.assetBase ?? "";
+  const _assetBase = valley?.assetBase ?? "";
 
   const selectedShotKey = useMemo(
-    () => `${selectedShot?.id ?? "none"}:${selectedShot?.cameraPosition.join(",") ?? ""}:${selectedShot?.target.join(",") ?? ""}`,
+    () =>
+      `${selectedShot?.id ?? "none"}:${selectedShot?.cameraPosition.join(",") ?? ""}:${selectedShot?.target.join(",") ?? ""}`,
     [selectedShot],
   );
 
@@ -102,12 +131,17 @@ export function TerrainViewer({
         if (!cancelled) {
           const textureUrls: LoadedAssets["textureUrls"] = {};
           if (manifest.terrain.texture) textureUrls.topographic = `${valley.assetBase}${manifest.terrain.texture}`;
-          if (manifest.terrain.rawTexture) textureUrls["raw-topo"] = `${valley.assetBase}${manifest.terrain.rawTexture}`;
-          if (manifest.terrain.hillshadeTexture) textureUrls["lidar-shade"] = `${valley.assetBase}${manifest.terrain.hillshadeTexture}`;
-          if (manifest.terrain.multiHillshadeTexture) textureUrls["multi-shade"] = `${valley.assetBase}${manifest.terrain.multiHillshadeTexture}`;
+          if (manifest.terrain.rawTexture)
+            textureUrls["raw-topo"] = `${valley.assetBase}${manifest.terrain.rawTexture}`;
+          if (manifest.terrain.hillshadeTexture)
+            textureUrls["lidar-shade"] = `${valley.assetBase}${manifest.terrain.hillshadeTexture}`;
+          if (manifest.terrain.multiHillshadeTexture)
+            textureUrls["multi-shade"] = `${valley.assetBase}${manifest.terrain.multiHillshadeTexture}`;
           if (manifest.terrain.slopeTexture) textureUrls.slope = `${valley.assetBase}${manifest.terrain.slopeTexture}`;
-          if (manifest.terrain.hypsoTexture) textureUrls.hypsometric = `${valley.assetBase}${manifest.terrain.hypsoTexture}`;
-          if (manifest.terrain.forestTexture) textureUrls.forest = `${valley.assetBase}${manifest.terrain.forestTexture}`;
+          if (manifest.terrain.hypsoTexture)
+            textureUrls.hypsometric = `${valley.assetBase}${manifest.terrain.hypsoTexture}`;
+          if (manifest.terrain.forestTexture)
+            textureUrls.forest = `${valley.assetBase}${manifest.terrain.forestTexture}`;
           setAssets({
             manifest: { ...valley, ...manifest, assetBase: valley.assetBase },
             terrain,
@@ -412,14 +446,20 @@ export function TerrainViewer({
             camera.position.copy(followState.position);
             rig.target.copy(followState.target);
           } else if (followState) {
-            followState.distanceM += (desiredDistance - followState.distanceM) * dampingAlpha(routeFollowConfig.distanceDamping, dt);
+            followState.distanceM +=
+              (desiredDistance - followState.distanceM) * dampingAlpha(routeFollowConfig.distanceDamping, dt);
             const heading = routeHeadingAtDistance(sampler, followState.distanceM);
             followState.heading.lerp(heading, dampingAlpha(routeFollowConfig.headingDamping, dt)).normalize();
             const subject = sampleRouteDistance(sampler, followState.distanceM);
-            const desiredTarget = sampleRouteDistance(sampler, followState.distanceM + routeFollowConfig.targetLookAheadM);
+            const desiredTarget = sampleRouteDistance(
+              sampler,
+              followState.distanceM + routeFollowConfig.targetLookAheadM,
+            );
             desiredTarget.y += routeFollowConfig.targetAltitudeM;
             const right = new THREE.Vector3(followState.heading.z, 0, -followState.heading.x).normalize();
-            const basePosition = subject.clone().add(followState.heading.clone().multiplyScalar(-routeFollowConfig.trailBackM));
+            const basePosition = subject
+              .clone()
+              .add(followState.heading.clone().multiplyScalar(-routeFollowConfig.trailBackM));
             basePosition.y += routeFollowConfig.cameraAltitudeM;
             const desiredSideOffsetM = sideOffsetForSightline(
               assets.terrain,
@@ -436,9 +476,13 @@ export function TerrainViewer({
             );
             desiredTarget.add(right.multiplyScalar(followState.sideOffsetM * routeFollowConfig.targetSideRatio));
             const settleBoost = followState.settled ? 1 : 1.9;
-            followState.position.lerp(desiredPosition, dampingAlpha(routeFollowConfig.positionDamping * settleBoost, dt));
+            followState.position.lerp(
+              desiredPosition,
+              dampingAlpha(routeFollowConfig.positionDamping * settleBoost, dt),
+            );
             followState.target.lerp(desiredTarget, dampingAlpha(routeFollowConfig.targetDamping * settleBoost, dt));
-            if (!followState.settled && followState.position.distanceTo(desiredPosition) < 90) followState.settled = true;
+            if (!followState.settled && followState.position.distanceTo(desiredPosition) < 90)
+              followState.settled = true;
             camera.position.copy(followState.position);
             rig.target.copy(followState.target);
           }
@@ -459,7 +503,7 @@ export function TerrainViewer({
         const desiredMarkerDistance = clamp(replayPositionRef.current / 100, 0, 1) * sampler.totalDistanceM;
         const markerDistance =
           cameraModeRef.current === "route-follow"
-            ? routeFollowStateRef.current?.distanceM ?? desiredMarkerDistance
+            ? (routeFollowStateRef.current?.distanceM ?? desiredMarkerDistance)
             : desiredMarkerDistance;
         sampleRouteDistance(sampler, markerDistance, marker.position);
         marker.position.y += 48;
@@ -519,7 +563,15 @@ export function TerrainViewer({
       rigRef.current = null;
       routeFollowStateRef.current = null;
     };
-  }, [assets, reportCamera, selectedShotKey, state.quality, state.showRoute, state.verticalExaggeration, state.viewMode]);
+  }, [
+    assets,
+    reportCamera,
+    selectedShotKey,
+    state.quality,
+    state.showRoute,
+    state.verticalExaggeration,
+    state.viewMode,
+  ]);
 
   useEffect(() => {
     if (!assets || !terrainMaterialRef.current) return;
@@ -532,7 +584,12 @@ export function TerrainViewer({
       material.vertexColors = true;
       applyTerrainLightingPreset(state.textureMode, false, terrainSpanRef.current, lightingRigRef.current);
       applyPostProcessingForTextureMode(state.textureMode, pipelineRef.current);
-      applyTerrainReliefPreset(state.textureMode, material, terrainReliefTextureRef.current, terrainForestTextureRef.current);
+      applyTerrainReliefPreset(
+        state.textureMode,
+        material,
+        terrainReliefTextureRef.current,
+        terrainForestTextureRef.current,
+      );
       previousTexture?.dispose();
       terrainTextureRef.current = null;
       return;
@@ -550,7 +607,12 @@ export function TerrainViewer({
       material.vertexColors = false;
       applyTerrainLightingPreset(state.textureMode, true, terrainSpanRef.current, lightingRigRef.current);
       applyPostProcessingForTextureMode(state.textureMode, pipelineRef.current);
-      applyTerrainReliefPreset(state.textureMode, material, terrainReliefTextureRef.current, terrainForestTextureRef.current);
+      applyTerrainReliefPreset(
+        state.textureMode,
+        material,
+        terrainReliefTextureRef.current,
+        terrainForestTextureRef.current,
+      );
       material.needsUpdate = true;
       terrainTextureRef.current = nextTexture;
       previousTexture?.dispose();
@@ -578,9 +640,7 @@ export function TerrainViewer({
   useEffect(() => {
     const routeMesh = routeMeshRef.current;
     if (!routeMesh) return;
-    (routeMesh.material as THREE.MeshBasicMaterial).color.set(
-      state.textureMode === "slope" ? 0x2f9bff : 0xd33b22,
-    );
+    (routeMesh.material as THREE.MeshBasicMaterial).color.set(state.textureMode === "slope" ? 0x2f9bff : 0xd33b22);
   }, [assets, state.textureMode]);
 
   useEffect(() => {
@@ -600,7 +660,9 @@ export function TerrainViewer({
     const camera = cameraRef.current;
     if (commands.frameRoute !== commandRef.current.frameRoute) {
       const routePoints = routePointsRef.current;
-      const center = routePoints.reduce((acc, point) => acc.add(point), new THREE.Vector3()).multiplyScalar(1 / Math.max(routePoints.length, 1));
+      const center = routePoints
+        .reduce((acc, point) => acc.add(point), new THREE.Vector3())
+        .multiplyScalar(1 / Math.max(routePoints.length, 1));
       const radius = Math.max(assets.terrain.widthM, assets.terrain.depthM) * 0.78;
       rigRef.current = {
         target: center,
@@ -623,7 +685,8 @@ export function TerrainViewer({
     if (commands.exportImage !== commandRef.current.exportImage && rendererRef.current) {
       const scene = sceneRef.current;
       const camera = cameraRef.current;
-      if (scene && camera) exportRendererImage(rendererRef.current, scene, camera, pipelineRef.current, markerRef.current);
+      if (scene && camera)
+        exportRendererImage(rendererRef.current, scene, camera, pipelineRef.current, markerRef.current);
     }
     commandRef.current = commands;
   }, [assets, commands, reportCamera, selectedShot, state.verticalExaggeration]);
@@ -695,8 +758,16 @@ export function TerrainViewer({
       <div ref={mountRef} className="three-mount" />
       {hasOverlay ? (
         <div className="status-overlay glass-panel">
-          {loadError ? <Map size={28} /> : status === "loading" || !assets ? <Loader2 className="spin" size={28} /> : <Mountain size={28} />}
-          <h2>{loadError ? "Terrain assets unavailable" : status === "ready" ? "Loading Escursione assets" : status}</h2>
+          {loadError ? (
+            <MapIcon size={28} />
+          ) : status === "loading" || !assets ? (
+            <Loader2 className="spin" size={28} />
+          ) : (
+            <Mountain size={28} />
+          )}
+          <h2>
+            {loadError ? "Terrain assets unavailable" : status === "ready" ? "Loading Escursione assets" : status}
+          </h2>
           <p>{loadError ?? "The web viewer is loading the exported LiDAR heightfield and GPX route."}</p>
         </div>
       ) : null}

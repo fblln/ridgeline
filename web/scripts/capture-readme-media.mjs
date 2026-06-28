@@ -4,8 +4,8 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright";
 import gifenc from "gifenc";
+import { chromium } from "playwright";
 import pngjs from "pngjs";
 
 const { GIFEncoder, applyPalette, quantize } = gifenc;

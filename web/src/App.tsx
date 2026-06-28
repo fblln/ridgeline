@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { EntryScreen } from "./EntryScreen";
 import { cumulativeMinutes } from "./app/routeTime";
 import { mapLayers } from "./app/viewerLabels";
 import {
@@ -14,6 +13,7 @@ import {
   ShotPanel,
   TopBar,
 } from "./components/ViewerChrome";
+import { EntryScreen } from "./EntryScreen";
 import { initialShots, valleys } from "./mockData";
 import { TerrainViewer } from "./TerrainViewer";
 import type {
@@ -73,9 +73,7 @@ export function App() {
   );
 
   const activeRoute = useMemo(
-    () =>
-      activeValley?.routes.find((route) => route.id === viewerState.routeId) ??
-      null,
+    () => activeValley?.routes.find((route) => route.id === viewerState.routeId) ?? null,
     [activeValley, viewerState.routeId],
   );
 
@@ -90,10 +88,7 @@ export function App() {
     return `${((b[1] + b[3]) / 2).toFixed(4)}, ${((b[0] + b[2]) / 2).toFixed(4)}`;
   }, [activeValley]);
 
-  const replayCumMin = useMemo(
-    () => (loadedRoute ? cumulativeMinutes(loadedRoute.points) : null),
-    [loadedRoute],
-  );
+  const replayCumMin = useMemo(() => (loadedRoute ? cumulativeMinutes(loadedRoute.points) : null), [loadedRoute]);
 
   const replayInfo = useMemo(() => {
     const points = loadedRoute?.points;
@@ -269,16 +264,12 @@ export function App() {
               state={viewerState}
               onStateChange={setViewerState}
               onTextureChange={setTextureMode}
-              onToggleRoute={() =>
-                setViewerState((state) => ({ ...state, showRoute: !state.showRoute }))
-              }
+              onToggleRoute={() => setViewerState((state) => ({ ...state, showRoute: !state.showRoute }))}
             />
             <ShotPanel
               shots={shots}
               selectedShotId={viewerState.selectedShotId}
-              onSelect={(selectedShotId) =>
-                setViewerState((state) => ({ ...state, selectedShotId }))
-              }
+              onSelect={(selectedShotId) => setViewerState((state) => ({ ...state, selectedShotId }))}
               onAdd={addShot}
             />
           </div>
@@ -309,12 +300,9 @@ export function App() {
             }}
           />
 
-          {exportImageUrl ? (
-            <ExportPreview imageUrl={exportImageUrl} onClose={() => setExportImageUrl(null)} />
-          ) : null}
+          {exportImageUrl ? <ExportPreview imageUrl={exportImageUrl} onClose={() => setExportImageUrl(null)} /> : null}
         </>
       )}
     </main>
   );
 }
-

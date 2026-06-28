@@ -3,11 +3,20 @@
  * Three.js helper modules. These types describe runtime scene state, not the
  * generated asset JSON schema.
  */
-import * as THREE from "three";
-import type { BorderAsset, RouteAsset, TerrainAsset, ViewerState, ValleyManifest, AppStatus, CameraSnapshot, SavedShot } from "../types";
+import type * as THREE from "three";
 import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import type { FXAAPass } from "three/examples/jsm/postprocessing/FXAAPass.js";
 import type { SSAOPass } from "three/examples/jsm/postprocessing/SSAOPass.js";
+import type {
+  AppStatus,
+  BorderAsset,
+  CameraSnapshot,
+  RouteAsset,
+  SavedShot,
+  TerrainAsset,
+  ValleyManifest,
+  ViewerState,
+} from "../types";
 
 export type ViewerCommand = {
   frameRoute: number;
@@ -102,4 +111,3 @@ export type TerrainLightingRig = {
   headlight: THREE.PointLight;
   terrainMaterial?: THREE.MeshPhongMaterial | null;
 };
-

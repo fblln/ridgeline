@@ -21,4 +21,3 @@ export function formatMinutes(min: number) {
   const m = Math.round(min % 60);
   return h > 0 ? `${h}h ${m.toString().padStart(2, "0")}` : `${m} min`;
 }
-
