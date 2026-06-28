@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(npm run *)",
-      "Bash(mkdir -p \"/Users/fabio/Workspace/ridgeline/design-docs\")",
-      "Bash(python3 -c ' *)"
-    ]
-  }
-}

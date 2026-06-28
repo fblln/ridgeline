@@ -1,3 +1,4 @@
+import "./otel"; // must load first so fetch is instrumented before any request
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";

@@ -1,60 +1,138 @@
 # Ridgeline
 
-Ridgeline is a shareable web app for exploring a trekking route over real LiDAR/DTM terrain. It is not a flight simulator. The goal is to move a cinematic camera through the valley, frame the route, save useful viewpoints, export high-resolution images, and preview a future route replay workflow.
+Ridgeline is a local web app for turning GPX routes into shareable 2D and 3D
+LiDAR terrain. It takes a trek, bakes real elevation and map data into a static
+asset package, and opens it in a React + Three.js viewer built for route
+inspection, cinematic camera work, saved viewpoints, replay previews, and
+high-resolution image export.
 
-The current app focuses on one high-quality example, `Escursione mattutina`, using static assets exported from the Python pipeline into a Vite + React + Three.js viewer.
+The project is built around one goal: make mountain routes inspectable as real
+terrain, not just as flat lines on a map.
 
-## What The App Does
+![Ridgeline terrain overview](docs/images/readme/terrain-overview.png)
 
-- Loads a baked LiDAR/DTM terrain package from `public/assets/escursione-mattutina/`.
-- Renders the terrain as a Three.js heightfield mesh.
-- Drapes a high-resolution topographic texture over the mesh.
-- Shows the GPX trek as a raised red tube above the terrain.
-- Shows the France/Italy border as a raised blue tube.
-- Provides orbit, free camera, and route-follow camera modes.
-- Preserves the camera when switching terrain textures.
-- Saves mock camera viewpoints in the UI.
-- Exports the current camera view as a high-resolution PNG.
-- Displays the Python/PyVista reference render for visual comparison.
-- Offers multiple terrain views: reference topo, raw topo, LiDAR shade, multi-shade, slope angle, hypsometric, and plain surface.
+*The current sample route, `Escursione mattutina`, rendered as a raised red GPX
+tube over a 3000 x 3000 terrain mesh with a baked topographic texture, LiDAR
+relief, forest layer, saved camera views, route replay, and image export.*
 
-The visual target is close to the existing Python PNG renders: crisp terrain, mountain-map lighting, dense route detail, strong topographic context, and useful camera framing controls.
+## What It Does
 
-## Current Quality Profile
+Ridgeline currently supports one high-quality bundled example and a local GPX
+import flow:
 
-The project is currently configured for maximum local quality, not performance.
+| Capability | What it does |
+|---|---|
+| **GPX to terrain** | Builds terrain around the route bounds instead of loading a generic map tile view. |
+| **Real DEM fusion** | Uses Piemonte ICE 2009-2011 DTM at 5 m with IGN LiDAR HD fill where coverage needs it. |
+| **3D route inspection** | Renders the trek as a raised tube over the terrain with orbit, free-camera, and route-follow modes. |
+| **Layer switching** | Switches between topo, LiDAR shade, slope, forest, hypsometric, and plain surface views without rebuilding the scene. |
+| **Camera workflow** | Saves useful viewpoints, frames the route, exposes altitude and route-distance readouts, and previews route replay. |
+| **High-res export** | Renders the current camera as a 7200 x 5400 PNG for sharing or visual review. |
+| **Import tracing** | Traces GPX imports through browser, Vite API, Python worker, DEM fetches, texture generation, and error logs. |
 
-Generated asset state:
+The default sample route is 21.6 km with +1539 m of elevation gain. The viewer
+loads a 5988 m x 4805 m terrain extent, 1412 m to 2637 m elevation range, and a
+10,488-point display route.
 
-| Asset | Current value |
-| --- | --- |
-| Terrain grid | `3000 x 3000` |
-| Terrain JSON | about `76 MB` |
-| Full asset folder | about `172 MB` |
-| Topographic texture | PNG, up to `8192 px` |
-| Route display points | about `10,488` |
-| Route display sampling | `2 m` |
-| Mesh smoothing | `0` |
-| Relief smoothing | `0.10` |
-| Slope smoothing | `0.6` |
-| Exported screenshot | `7200 x 5400` PNG |
+## Dataset
 
-This is intentionally heavy. It is appropriate for a powerful local machine and high-density display. For public sharing over the internet, the next step should be tiled terrain and level-of-detail, not simply making this single mesh larger.
+The sample dataset is intentionally real and heavy enough to prove the pipeline,
+not a toy demo. `Escursione mattutina` covers a cross-border alpine area near
+Piemonte / France. The README media is committed, but the runtime terrain
+package itself is ignored by Git and must be generated locally.
+
+The showcase screenshots were captured from a max-quality bake:
+
+| Asset | Showcase value |
+|---|---:|
+| Terrain grid | `3000 x 3000` height samples |
+| Terrain JSON | `76 MB` |
+| Topographic texture | `18 MB` PNG, up to `8192 px` |
+| Full asset folder | `174 MB` |
+| Route file | `846 KB` JSON |
+| Display route | `10,488` sampled points |
+| Route distance | `21.6 km` |
+| Elevation gain | `+1539 m` |
+| Terrain extent | `5988 m x 4805 m` |
+
+The default baker command chooses a route-sized grid from `WEB_TARGET_RES_M`.
+For this sample route it currently produces about a `1199 x 1199` grid and an
+ignored `81 MB` asset folder. Use the explicit max-quality command below when
+you need to reproduce the showcase-level bake.
+
+The source stack is mixed because alpine coverage is mixed:
+
+| Source | Used for |
+|---|---|
+| **GPX track** | Route bounds, distance, elevation profile, and replay path. |
+| **Piemonte ICE 2009-2011 DTM** | Primary 5 m terrain source where available. |
+| **IGN LiDAR HD / RGE ALTI** | Fill source around France/cross-border gaps and import-quality presets. |
+| **OpenTopoMap tiles** | Draped topographic mosaic and visual map context. |
+| **Copernicus HRL Tree Cover Density 2018** | Forest/canopy layer baked into `terrain-forest.png`. |
+| **Overpass administrative boundaries** | France / Italy border overlay in local terrain coordinates. |
+
+The web mesh can be denser than some source cells, but it cannot invent
+real-world detail beyond the underlying DEM. Where the source is Piemonte DTM,
+the true elevation source is still 5 m.
+
+## Current App Experience
+
+The app starts with a compact entry surface for search, coordinates, or GPX
+import. Search and coordinate loading open the generated sample area after the
+asset baker has written it locally; GPX import uses the real local worker
+pipeline.
+
+![Ridgeline entry screen](docs/images/readme/entry.png)
+
+When a GPX is imported, the UI exposes the actual generation pipeline instead of
+hiding it behind an indeterminate spinner: worker startup, GPX parsing, DEM
+fetching, route/terrain sampling, texture baking, relief/slope rendering, forest
+layer generation, and final asset handoff.
+
+![Ridgeline GPX import progress](docs/images/readme/import-progress.png)
+
+The viewer is designed as a workbench rather than a flight simulator. The right
+rail controls map layers, vertical exaggeration, and route visibility. The
+bottom camera toolbar switches between orbit, free camera, and route-follow
+preview.
+
+![Ridgeline route replay](docs/images/readme/route-replay.gif)
+
+*Route-follow mode scrubs along the GPX track and keeps the camera near the
+terrain, previewing a future authored replay workflow.*
+
+### Terrain Layers
+
+The same terrain mesh can be inspected through multiple baked textures. This is
+useful because no single layer answers every question: topo gives context,
+hillshade exposes terrain form, slope highlights steepness, and forest shows
+canopy/land-cover hints.
+
+![Ridgeline layer comparison](docs/images/readme/layer-comparison.png)
+
+### Export Workflow
+
+The visible canvas stays interactive, but export temporarily renders the current
+camera at 7200 x 5400 and returns a downloadable PNG preview.
+
+![Ridgeline export preview](docs/images/readme/export-preview.png)
 
 ## How It Works
 
-There are two parts:
+Ridgeline has two main parts:
 
-1. Python asset baker: `../export_web_example.py`
-2. Web viewer: this `web/` app
+1. **Python asset baker** - `../tools/asset-baker/export_web_example.py`
+2. **Static web viewer** - this Vite + React + Three.js app
 
-The Python script reads the GPX route, samples the elevation sources, builds terrain textures, converts everything into a static web asset package, and writes it to:
+The baker reads the GPX route, samples DEM sources, builds map and terrain
+textures, converts route points into local projected meters, and writes a static
+asset package under:
 
 ```text
 web/public/assets/escursione-mattutina/
 ```
 
-The React app then fetches:
+The browser then loads only static files:
 
 ```text
 manifest.json
@@ -67,34 +145,76 @@ terrain-hillshade.png
 terrain-multishade.png
 terrain-slope.png
 terrain-hypso.png
-terrain-normal.png
+terrain-forest.png
 reference-render.png
 reference-preview.jpg
 angle-sheet.png
 ```
 
-No Python code runs in the browser. The browser only loads static files.
+No Python runs in the browser. Once the asset package exists, the viewer can be
+served as a static web app.
 
-## Data Sources
+```mermaid
+flowchart TB
+    GPX["GPX route"] --> API["Vite import API"]
+    API --> Worker["Python asset worker"]
+    DEM["Piemonte DTM + IGN LiDAR HD"] --> Worker
+    Topo["OpenTopoMap tiles"] --> Worker
+    Forest["Copernicus tree cover"] --> Worker
+    Boundary["Overpass borders"] --> Worker
+    Worker --> Assets["Static terrain package"]
+    Assets --> Viewer["React + Three.js viewer"]
+    Viewer --> Inspect["2D / 3D inspection"]
+    Viewer --> Replay["Route-follow replay"]
+    Viewer --> Export["7200 x 5400 PNG export"]
+```
 
-The default elevation recipe is designed to match the Python reference renderer:
+### Parallel Asset Generation
 
-- Piemonte ICE 2009-2011 DTM at `5 m` where available.
-- IGN LiDAR HD / RGE ALTI fill at `1 m` where needed, especially around cross-border gaps.
+The expensive work is mostly network and image I/O, so the baker overlaps it
+instead of running one long serial fetch:
 
-The important point: increasing the web mesh density does not create new real-world detail beyond the source DEM. A `3000 x 3000` mesh displays the sampled surface more finely, but areas backed by Piemonte data still originate from a `5 m` DTM.
+| Parallel path | What happens |
+|---|---|
+| **Fetch workers** | `WEB_FETCH_WORKERS` defaults to `16`; DEM and topo tile fetches run through a `ThreadPoolExecutor`. |
+| **Background prefetch** | Topo tile and forest cache warming start while the DEM source is being built. |
+| **Named task spans** | Each parallel task can run as `dem-tile`, `topo-tile`, or `encode-relief`, so Jaeger shows the fan-out instead of one opaque worker span. |
+| **Retrying downloads** | External HTTP fetches retry transient failures with light backoff because many concurrent tile requests make one-off network errors normal. |
+| **Parallel texture writes** | Relief, slope, hypsometric, multishade, normal, and raw/topo outputs are encoded through the same worker helper. |
 
-## Coordinate System
+The point is not just speed. Parallelism makes the import UI and tracing honest:
+the user can see whether time is going into DEM coverage, tile download,
+texture rendering, forest data, or final JSON/PNG writes.
+
+### Coordinate System
 
 The web viewer uses a right-handed Three.js scene:
 
 | Real-world direction | Scene axis |
-| --- | --- |
+|---|---|
 | East | `+x` |
 | North | `-z` |
 | Elevation | `+y` |
 
-The exporter stores route and border points in local projected meters. The viewer recenters them around the terrain midpoint and applies vertical exaggeration at render time.
+Route and border points are stored in local projected meters. The viewer
+recenters them around the terrain midpoint and applies vertical exaggeration at
+render time.
+
+## Engineering Highlights
+
+| Area | Detail |
+|---|---|
+| **Terrain mesh** | Three.js `BufferGeometry` built from typed arrays for positions, UVs, colors, and indices. |
+| **Visual quality** | High-resolution draped textures, anisotropic filtering, relief shader pass, SSAO, FXAA, and terrain-specific lighting presets. |
+| **Camera rig** | Orbit, free-camera, and route-follow modes share one camera state so layer changes do not reset composition. |
+| **Route replay** | Samples the route by distance, looks ahead on the track, offsets the camera for sightlines, and damps position/target changes. |
+| **Import pipeline** | GPX upload starts a Vite API job, validates supported Piemonte/France bounds, runs the Python worker, writes generated assets, and loads the new manifest back into the viewer. |
+| **Parallel workers** | Fetches and encodes run through bounded worker pools, with independent topo/forest prefetch overlapping DEM work. |
+| **Observability** | OpenTelemetry traces browser fetches, API job handling, Python worker stages, worker-thread tasks, and external DEM/tile HTTP calls. |
+
+The web render is designed to approach the Python/PyVista reference render, but
+it is intentionally a browser renderer: it uses WebGL materials, screen-space
+effects, and interactive camera controls instead of an offline VTK pipeline.
 
 ## Run Locally
 
@@ -116,9 +236,7 @@ Open:
 http://localhost:5173/
 ```
 
-The dev server is configured with `--host 0.0.0.0`, so it can also be opened from another device on the same network if your firewall allows it.
-
-## Build
+Build the production bundle:
 
 ```bash
 npm run build
@@ -130,17 +248,15 @@ Preview the production build:
 npm run preview
 ```
 
-## Regenerate The Web Assets
+## Regenerate The Terrain Assets
 
 From the repository root:
 
 ```bash
-/opt/miniconda3/bin/python export_web_example.py
+python tools/asset-baker/export_web_example.py examples/gpx/Escursione_mattutina.gpx
 ```
 
-That command uses the max-quality defaults currently encoded in the exporter.
-
-Equivalent explicit command:
+For a showcase-level max-quality bake, use:
 
 ```bash
 WEB_DEM_SOURCE=mixed \
@@ -153,265 +269,108 @@ WEB_MESH_SMOOTH=0 \
 WEB_RELIEF_SMOOTH=0.10 \
 WEB_SLOPE_SMOOTH=0.6 \
 WEB_ROUTE_STEP_M=2 \
-/opt/miniconda3/bin/python export_web_example.py
+python tools/asset-baker/export_web_example.py examples/gpx/Escursione_mattutina.gpx
 ```
 
-## Exporter Knobs
+Important knobs:
 
 | Variable | Default | Meaning |
-| --- | ---: | --- |
-| `WEB_DEM_SOURCE` | `mixed` | `mixed` uses Piemonte DTM first and IGN fill second. `ign` forces IGN-only sampling for inspection. |
-| `WEB_DEM_RES_M` | `1` | Requested IGN fill resolution in meters. |
-| `WEB_GRID` | `3000` | Browser terrain mesh resolution. Higher means more vertices and a much larger `terrain.json`. |
-| `WEB_TEXTURE_MAX` | `8192` | Maximum draped topo texture dimension. |
-| `WEB_TILEZOOM` | `17` | OpenTopoMap tile zoom used for the topo mosaic. |
-| `WEB_PIEMONTE_SAMPLE_ORDER` | `1` | Interpolation order for Piemonte raster sampling. `1` is linear; `0` is nearest-neighbor and can look blocky. |
-| `WEB_MESH_SMOOTH` | `0` | Gaussian smoothing applied to the actual displayed mesh. Keep at `0` for sharpest terrain. |
-| `WEB_RELIEF_SMOOTH` | `0.10` | Smoothing used for auxiliary hillshade-like textures. |
-| `WEB_SLOPE_SMOOTH` | `0.6` | Smoothing used before slope classification. Lower values are sharper but noisier. |
-| `WEB_ROUTE_STEP_M` | `2` | GPX simplification step for the displayed route. Lower means more route points. |
-| `WEB_MARGIN` | `0.0025` | Bounding-box padding around the GPX route, in degrees. |
-| `WEB_DEM_CONTOURS` | `0` | Enable generated DEM contour overlay on the topo texture. Usually off because the topo tiles already include contours. |
-| `WEB_CONTOUR_MINOR_M` | `40` | Minor generated contour interval if `WEB_DEM_CONTOURS=1`. |
-| `WEB_CONTOUR_MAJOR_M` | `200` | Major generated contour interval if `WEB_DEM_CONTOURS=1`. |
-| `WEB_BAKE_RELIEF` | `0` | Bake Python-style relief into the topo texture. Usually off so the topo texture remains closer to the source map. |
-| `WEB_TEXTURE_SAT` | `1.45` | Color saturation applied to the topo texture. |
-| `WEB_TEXTURE_BRIGHT` | `0.82` | Brightness applied to the topo texture. |
-| `WEB_TEXTURE_CONTRAST` | `1.16` | Contrast applied to the topo texture. |
+|---|---:|---|
+| `WEB_DEM_SOURCE` | `mixed` | Piemonte DTM first, IGN fill second. Use `ign` to force IGN-only sampling. |
+| `WEB_TARGET_RES_M` | `5` | Target ground resolution in meters per cell when grid is computed from route size. |
+| `WEB_GRID_MAX` | `3000` | Maximum grid size per axis for generated terrain. |
+| `WEB_GRID` | unset | Force a fixed grid size, bypassing target-resolution sizing. |
+| `WEB_TEXTURE_MAX` | `8192` | Maximum terrain texture dimension. |
+| `WEB_TILEZOOM` | `17` | OpenTopoMap zoom level for the topo mosaic. |
+| `WEB_ROUTE_STEP_M` | `2` | Route simplification step for displayed route points. |
 
-## Asset Contract
+Higher values improve close-up detail only when the source data supports it.
+Piemonte-backed cells still originate from a 5 m DTM.
 
-The viewer starts from `manifest.json`. The important fields are:
+## Capture README Media
 
-```ts
-type ValleyManifest = {
-  id: string;
-  name: string;
-  bounds: [number, number, number, number];
-  projection: {
-    kind: "local-equirectangular";
-    lat0: number;
-    originLon: number;
-    originLat: number;
-  };
-  terrain: {
-    data: string;
-    heightmap: string;
-    texture?: string;
-    rawTexture?: string;
-    hillshadeTexture?: string;
-    multiHillshadeTexture?: string;
-    slopeTexture?: string;
-    hypsoTexture?: string;
-    normalTexture?: string;
-    demSource?: string;
-    demSourceLabel?: string;
-    gridSize: number;
-    widthM: number;
-    depthM: number;
-    minHeightM: number;
-    maxHeightM: number;
-  };
-  defaultCamera: {
-    position: [number, number, number];
-    target: [number, number, number];
-    fov?: number;
-  };
-  routes: Array<{
-    id: string;
-    name: string;
-    path: string;
-    distanceKm: number;
-    elevationGainM: number;
-    pointCount: number;
-  }>;
-};
+The screenshots and GIFs in this README are committed under
+`docs/images/readme/`. They can be regenerated from the running app after the
+sample terrain assets exist:
+
+```bash
+npm run capture:readme
 ```
 
-`terrain.json` stores:
+The script starts Vite on port `5177`, opens the generated
+`Escursione mattutina` asset package, captures the entry screen, terrain
+overview, layer comparison, route replay GIF, and export preview, then validates
+screenshots with pixel variance checks so blank WebGL output fails the run.
 
-```ts
-type TerrainAsset = {
-  gridSize: number;
-  widthM: number;
-  depthM: number;
-  minHeightM: number;
-  maxHeightM: number;
-  heights: number[];
-};
+If `web/public/assets/escursione-mattutina/manifest.json` is missing, the script
+prints the baker command to run first.
+
+## Tracing / APM
+
+GPX import tracing is optional, but it is wired end to end. The browser starts
+the trace when it uploads a GPX, the Vite API continues it for the import job,
+and the API passes a W3C `TRACEPARENT` environment variable into the Python
+worker. The worker then creates spans for parsing, elevation source selection,
+sampling, texture generation, forest export, and per-task tile/HTTP calls.
+
+![Ridgeline Jaeger import trace](docs/images/readme/tracing-jaeger.png)
+
+*A real Jaeger trace from a Ridgeline import: browser POST → Vite `import-job`
+→ Python `build-assets` → parallel `topo-tile` tasks → external HTTP `GET`
+calls. This trace has 3 services and 163 spans.*
+
+Start Jaeger before importing:
+
+```bash
+npm run jaeger
 ```
 
-`route.json` stores route points in local meters:
+Then run the app, import a GPX, and open:
 
-```ts
-type RoutePoint = {
-  x: number;
-  y: number;
-  z: number;
-  d: number;
-  lat: number;
-  lon: number;
-};
+```text
+http://localhost:16686/
 ```
 
-In route points, `x` is east/west local meters, `y` is north/south local meters, `z` is elevation meters, and `d` is cumulative route distance.
+Useful services:
 
-## Viewer Controls
+| Tier | File | Service name |
+|---|---|---|
+| Browser | `src/otel.ts` | `ridgeline-web` |
+| Vite API | `otel.node.ts`, `gpxImportServer.ts` | `ridgeline-api` |
+| Python worker | `../tools/asset-baker/otel_worker.py` | `ridgeline-worker` |
 
-### Camera Modes
+Trace shape:
 
-| Mode | Purpose |
-| --- | --- |
-| Orbit | Rotate around the selected viewpoint or framed route. Best for composing still images. |
-| Free camera | Move through the scene with simplified keyboard and pointer controls. Best for exploring the valley. |
-| Route follow | Preview a camera moving near the trek route. This is an early replay mode, not a final cinematic renderer. |
+| Span / service | What it answers |
+|---|---|
+| `ridgeline-web: HTTP POST` | Did the browser upload and poll successfully? |
+| `ridgeline-api: import-job` | How long did the whole import job take, and did it fail? |
+| `ridgeline-worker: build-assets` | How long did Python asset generation take? |
+| `parse-gpx`, `elevation-source`, `sample-elevation`, `textures` | Which build stage consumed time? |
+| `dem-tile`, `topo-tile`, `warm-forest`, `encode-relief` | Which parallel worker tasks were active? |
+| auto-instrumented `GET` spans | Which external DEM/tile endpoints were slow or errored? |
 
-### Texture Modes
+If the collector is down, imports still work. Trace export failures are ignored,
+and failed jobs write a `build.log` next to the generated assets.
 
-| Mode | What it shows |
-| --- | --- |
-| Reference topo | Enhanced topo texture intended for normal viewing and screenshots. |
-| Raw topo | Same topo mosaic before relief-specific changes. Useful for inspection. |
-| LiDAR shade | Single-direction hillshade from the elevation surface. |
-| Multi shade | Multi-direction shade to reveal terrain in more orientations. |
-| Slope angle | Slope classes computed from `atan(sqrt((dz/dx)^2 + (dz/dy)^2))`. |
-| Hypsometric | Elevation-colored shaded terrain. |
-| Surface | Plain vertex-colored terrain when no texture is used. |
+## Known Limits / Next Architecture
 
-Changing texture mode updates the material map in place. It should not reset the camera or rebuild the terrain scene.
+The current app is configured for maximum local quality, not public web
+performance:
 
-### Screenshot Export
+- The viewer loads one monolithic `terrain.json`.
+- A 3000 x 3000 grid is near the practical ceiling for this architecture.
+- Initial load is heavy because terrain and textures are large.
+- Saved shots are local app state, not persisted to a backend.
+- Route replay is a preview, not a full cinematic timeline editor.
 
-The export button renders the current camera view to a `7200 x 5400` PNG and shows a download preview. This is intentionally much larger than the visible canvas so that still images look good on high-density displays.
-
-## Rendering Pipeline
-
-The web renderer uses:
-
-- Three.js `BufferGeometry` terrain mesh.
-- Typed arrays for positions, UVs, colors, and indices.
-- `MeshLambertMaterial` with high-resolution texture maps.
-- Linear mipmapped texture filtering.
-- Maximum available anisotropy.
-- Right-handed terrain orientation.
-- Northwest mountain-map style directional light.
-- Ambient and hemisphere fill.
-- Weak camera headlight.
-- SSAO in high quality.
-- FXAA post-processing.
-- Supersampled PNG export.
-
-This is inspired by the Python/PyVista output, but it is not the same renderer. PyVista/VTK and browser WebGL have different shading, antialiasing, and geometry pipelines.
-
-## Why The Web Image Can Still Differ From Python
-
-The largest differences usually come from:
-
-- Elevation source coverage: Piemonte 5 m data vs IGN 1 m fill.
-- Mesh architecture: one browser mesh vs PyVista's offline rendering path.
-- Texture source: OpenTopoMap tile mosaic vs whatever cartographic layer the Python render used.
-- Lighting model: browser Lambert + SSAO vs VTK/PyVista shading and SSAA.
-- Screen-space effects: browser post-processing depends on viewport and GPU.
-- Texture compression/history: the current max-quality bake uses PNG, but older generated JPEGs may still exist in the asset folder.
-
-The current setup minimizes avoidable losses in the browser, but the true next fidelity jump is tiled terrain with LOD and source-native raster tiles.
-
-## Known Limits
-
-- The app currently loads one monolithic terrain JSON.
-- `3000 x 3000` is near the practical ceiling for this architecture.
-- Initial load can be slow because the terrain payload is large.
-- Public sharing will be bandwidth-heavy unless assets are tiled/compressed differently.
-- The replay mode is a preview, not a final authored cinematic timeline.
-- Saved shots are currently in app state/mock data, not persisted to a backend.
-- The Python offline baker remains the source of truth for terrain data preparation.
-
-## Recommended Next Architecture
-
-For even higher quality without making the app fragile, move from a single mesh to tiled terrain:
+The next architecture step is tiled terrain with level of detail:
 
 1. Split the DEM into terrain tiles.
-2. Store each tile as a binary height tile, not one giant JSON file.
+2. Store each tile as a binary height tile instead of one giant JSON file.
 3. Generate multiple LOD levels per tile.
-4. Load high-resolution tiles only near the camera.
-5. Keep lower-resolution tiles in the distance.
-6. Use matching tiled topo/relief textures.
-7. Stream route segments and overlays by visible tile.
+4. Stream high-resolution tiles near the camera and lower-resolution tiles in the distance.
+5. Use matching tiled topo, relief, and land-cover textures.
 
-This would allow the same source data to look sharper close to the camera while keeping far terrain manageable.
-
-## Troubleshooting
-
-### The viewer is blank
-
-Check the browser console first. Common causes:
-
-- `manifest.json` was not generated.
-- `terrain.json` is missing or partially written.
-- Vite is serving an old asset folder.
-- The browser ran out of memory while parsing the monolithic terrain JSON.
-
-### The terrain looks mirrored
-
-Verify the scene mapping:
-
-- East must be `+x`.
-- North must be `-z`.
-- Elevation must be `+y`.
-
-The current viewer already uses this orientation.
-
-### Texture switching resets the camera
-
-That should not happen. Texture changes are handled separately from scene creation. If this regresses, check the dependency list of the main scene-building `useEffect` in `src/TerrainViewer.tsx`; `state.textureMode` should not force scene teardown.
-
-### The terrain looks too smooth
-
-Regenerate with:
-
-```bash
-WEB_MESH_SMOOTH=0 WEB_RELIEF_SMOOTH=0.05 WEB_SLOPE_SMOOTH=0.4 /opt/miniconda3/bin/python export_web_example.py
-```
-
-The terrain cannot become sharper than the source DEM. For Piemonte-backed cells, the underlying source is still 5 m.
-
-### The slope view looks noisy
-
-Increase slope smoothing:
-
-```bash
-WEB_SLOPE_SMOOTH=1.2 /opt/miniconda3/bin/python export_web_example.py
-```
-
-### The app is too slow
-
-Use a smaller grid:
-
-```bash
-WEB_GRID=2000 WEB_TEXTURE_MAX=4096 /opt/miniconda3/bin/python export_web_example.py
-```
-
-This lowers fidelity, but it is still a strong interactive preview.
-
-## Important Files
-
-| File | Purpose |
-| --- | --- |
-| `../export_web_example.py` | Python asset exporter. |
-| `src/App.tsx` | Main UI shell, panels, HUD, timeline, export preview. |
-| `src/TerrainViewer.tsx` | Three.js scene, terrain mesh, route/border geometry, camera controls, screenshot export. |
-| `src/mockData.ts` | Local valley metadata and initial saved shots. |
-| `src/types.ts` | Shared TypeScript data contracts. |
-| `src/styles.css` | Visual design system and layout. |
-| `public/assets/escursione-mattutina/manifest.json` | Entry point for generated assets. |
-| `public/assets/escursione-mattutina/terrain.json` | Monolithic terrain heightfield. |
-| `public/assets/escursione-mattutina/route.json` | Display route points. |
-
-## Development Notes
-
-- Keep the web app static-file friendly. The asset baker can be complex; the viewer should remain easy to host.
-- Keep camera controls focused on photography and replay, not aircraft simulation.
-- Avoid flight-simulator terminology in the UI.
-- Prefer preserving camera state across visual changes.
-- Treat the Python reference PNG as the visual benchmark.
-- If quality needs to increase again, invest in tiled terrain + LOD rather than pushing the monolithic mesh much further.
+That would keep the visual ambition while making public sharing and larger
+routes practical.
