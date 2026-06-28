@@ -16,6 +16,6 @@
     }
   },
   "files": {
-    "includes": ["**", "!dist/**", "!node_modules/**", "!public/assets/**", "!public/generated/**"]
+    "includes": ["**", "!dist", "!node_modules", "!public/assets", "!public/generated"]
   }
 }

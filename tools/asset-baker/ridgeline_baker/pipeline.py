@@ -541,7 +541,7 @@ def export_border_overlay(lo_lo, lo_hi, la_lo, la_hi, lat0, x0, y0, heights, cac
                         "y": round(float(py), 2),
                         "z": round(float(pz), 2),
                     }
-                    for px, py, pz in zip(x, y, z)
+                    for px, py, pz in zip(x, y, z, strict=True)
                 ]
             )
     border = {"id": "france-italy-border", "name": "France / Italy border", "color": "#1f6bff", "lines": overlays}
@@ -630,7 +630,7 @@ def build_assets(gpx_path: Path, final_image: Path, angles_image: Path, out_dir:
             "lat": round(float(a), 7),
             "lon": round(float(o), 7),
         }
-        for x, y, z, d, a, o in zip(route_x, route_y, route_z, route_d, route_lat, route_lon)
+        for x, y, z, d, a, o in zip(route_x, route_y, route_z, route_d, route_lat, route_lon, strict=True)
     ]
 
     DEFAULT_CACHE.mkdir(parents=True, exist_ok=True)

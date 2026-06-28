@@ -121,7 +121,7 @@ export function applyTerrainReliefPreset(
   userData.terrainReliefIntensity = relief?.intensity ?? 0;
   userData.terrainReliefContrast = relief?.contrast ?? 1;
   userData.terrainForestTexture = forestTexture ?? neutralReliefTexture;
-  userData.terrainForestIntensity = forestTexture ? relief?.forest ?? 0 : 0;
+  userData.terrainForestIntensity = forestTexture ? (relief?.forest ?? 0) : 0;
   const uniforms = userData.terrainReliefUniforms;
   if (uniforms) {
     uniforms.terrainReliefMap.value = userData.terrainReliefTexture;
@@ -133,7 +133,10 @@ export function applyTerrainReliefPreset(
   material.needsUpdate = true;
 }
 
-export function applyPostProcessingForTextureMode(textureMode: ViewerState["textureMode"], pipeline: RenderPipeline | null) {
+export function applyPostProcessingForTextureMode(
+  textureMode: ViewerState["textureMode"],
+  pipeline: RenderPipeline | null,
+) {
   if (!pipeline) return;
   if (pipeline.fxaaPass) pipeline.fxaaPass.enabled = true;
   if (pipeline.ssaoPass) {
@@ -164,11 +167,7 @@ export function applyTerrainLightingPreset(
   rig.hemi.intensity = preset.hemisphere.intensity;
   rig.sun.color.setHex(preset.sun.color);
   rig.sun.intensity = preset.sun.intensity;
-  rig.sun.position.set(
-    span * preset.sun.position[0],
-    span * preset.sun.position[1],
-    span * preset.sun.position[2],
-  );
+  rig.sun.position.set(span * preset.sun.position[0], span * preset.sun.position[1], span * preset.sun.position[2]);
   rig.headlight.color.setHex(preset.headlight.color);
   rig.headlight.intensity = preset.headlight.intensity;
   if (rig.terrainMaterial) {
@@ -177,4 +176,3 @@ export function applyTerrainLightingPreset(
     rig.terrainMaterial.needsUpdate = true;
   }
 }
-

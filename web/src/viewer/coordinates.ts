@@ -26,7 +26,11 @@ export function localToScene(point: [number, number, number], terrain: TerrainAs
   );
 }
 
-export function sceneToLocal(point: THREE.Vector3, terrain: TerrainAsset, verticalExaggeration: number): [number, number, number] {
+export function sceneToLocal(
+  point: THREE.Vector3,
+  terrain: TerrainAsset,
+  verticalExaggeration: number,
+): [number, number, number] {
   return [
     point.x + terrain.widthM / 2,
     terrain.depthM / 2 - point.z,
@@ -58,4 +62,3 @@ export function applyRig(camera: THREE.PerspectiveCamera, rig: CameraRig) {
 export function dampingAlpha(damping: number, dt: number) {
   return 1 - Math.exp(-damping * dt);
 }
-

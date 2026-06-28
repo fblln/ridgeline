@@ -21,16 +21,14 @@ export function parseQuality(url: URL): ImportQuality {
 }
 
 export function importJobId(gpxText: string, quality: ImportQuality) {
-  return createHash("sha256")
-    .update(gpxText)
-    .update(quality)
-    .update("ridgeline-import-v1")
-    .digest("hex")
-    .slice(0, 16);
+  return createHash("sha256").update(gpxText).update(quality).update("ridgeline-import-v1").digest("hex").slice(0, 16);
 }
 
 export function slugify(value: string) {
-  const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
   return slug || "imported-route";
 }
 
@@ -57,7 +55,12 @@ export function boundsInside(
   bounds: { west: number; south: number; east: number; north: number },
   region: { west: number; south: number; east: number; north: number },
 ) {
-  return bounds.west >= region.west && bounds.east <= region.east && bounds.south >= region.south && bounds.north <= region.north;
+  return (
+    bounds.west >= region.west &&
+    bounds.east <= region.east &&
+    bounds.south >= region.south &&
+    bounds.north <= region.north
+  );
 }
 
 export function validateSupportedRegion(gpxText: string) {

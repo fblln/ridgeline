@@ -2,11 +2,11 @@ import { Check, Compass, Loader2, MapPin, Mountain, Search, Upload } from "lucid
 import { useEffect, useRef, useState } from "react";
 import {
   cancelImportJob,
+  type ImportQuality,
   importStages,
+  type JobState,
   qualityOptions,
   runGpxImport,
-  type ImportQuality,
-  type JobState,
 } from "./import/importClient";
 import type { ValleyManifest } from "./types";
 
@@ -146,7 +146,7 @@ export function EntryScreen({ onLoad }: { onLoad: (valley?: ValleyManifest | nul
                     }}
                   />
                 </div>
-                <div className="quality-select" role="group" aria-label="Terrain quality">
+                <fieldset className="quality-select" aria-label="Terrain quality">
                   {qualityOptions.map((option) => (
                     <button
                       type="button"
@@ -160,7 +160,7 @@ export function EntryScreen({ onLoad }: { onLoad: (valley?: ValleyManifest | nul
                       <span>{option.res}/cell</span>
                     </button>
                   ))}
-                </div>
+                </fieldset>
               </div>
             ) : null}
 
@@ -228,7 +228,11 @@ function ImportProgress({ job, elapsed }: { job: JobState; elapsed: number }) {
           return (
             <li key={stage.label} className={`import-stage ${state}`}>
               <span className="import-stage-icon">
-                {state === "done" ? <Check size={13} /> : state === "active" ? <Loader2 className="spin" size={13} /> : null}
+                {state === "done" ? (
+                  <Check size={13} />
+                ) : state === "active" ? (
+                  <Loader2 className="spin" size={13} />
+                ) : null}
               </span>
               {stage.label}
             </li>

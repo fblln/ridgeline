@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import * as THREE from "three";
+import { describe, expect, it } from "vitest";
 import type { TerrainAsset } from "../types";
 import { clamp, localToScene, sceneToLocal } from "./coordinates";
 
