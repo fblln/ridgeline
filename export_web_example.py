@@ -378,6 +378,58 @@ def export_relief_textures(heights, width_m, depth_m, out_dir):
     }
 
 
+def export_forest_texture(lo_lo, lo_hi, la_lo, la_hi, out_dir, shade):
+    # Copernicus HRL Tree Cover Density 2018 (10 m), via EEA Discomap's public ImageServer.
+    # Raw 0-100 % canopy values, colourised to a paper-map green with relief baked in (like slope/hypso).
+    px = int(os.environ.get("WEB_FOREST_PX", "2048"))
+    wm = (lo_hi - lo_lo) * 111320 * math.cos(math.radians((la_lo + la_hi) / 2))
+    hm = (la_hi - la_lo) * 111320
+    width, height = px, max(1, int(round(px * hm / wm)))
+    base = os.environ.get(
+        "WEB_FOREST_URL",
+        "https://image.discomap.eea.europa.eu/arcgis/rest/services/"
+        "GioLandPublic/HRL_TreeCoverDensity_2018/ImageServer/exportImage",
+    )
+    q = {
+        "bbox": f"{lo_lo},{la_lo},{lo_hi},{la_hi}",
+        "bboxSR": "4326",
+        "imageSR": "4326",
+        "size": f"{width},{height}",
+        "format": "tiff",
+        "pixelType": "U8",
+        "interpolation": "RSP_BilinearInterpolation",
+        "f": "image",
+    }
+    path = DEFAULT_CACHE / f"forest_{lo_lo:.4f}_{la_lo:.4f}_{lo_hi:.4f}_{la_hi:.4f}_{width}x{height}.tif"
+    try:
+        if not path.exists():
+            urllib.request.urlretrieve(base + "?" + urllib.parse.urlencode(q), path)
+        with rasterio.open(path) as src:
+            tcd = src.read(1).astype(np.float32)
+    except Exception as exc:
+        print(f"  Copernicus tree-cover unavailable, skipping forest layer: {exc}")
+        return None
+    tcd = tcd[::-1]  # exportImage is north-up; relief arrays/heights are south-up
+    tcd[tcd > 100] = 0.0  # 254/255 = nodata / outside coverage
+    # Only real forest reads green: drop canopy below the threshold (scattered trees / meadow look like grass otherwise).
+    thresh = float(os.environ.get("WEB_FOREST_MIN_TCD", "50"))
+    d = np.clip((tcd - thresh) / (100.0 - thresh), 0.0, 1.0)
+    cream = np.array([243, 239, 226], dtype=float)
+    g_lo = np.array([120, 162, 104], dtype=float)  # threshold canopy
+    g_hi = np.array([42, 86, 44], dtype=float)  # dense canopy
+    green = g_lo[None, None] + (g_hi - g_lo)[None, None] * d[..., None]
+    vis = np.clip(d * 3.0, 0.0, 1.0)[..., None]  # soft edge near threshold, paper below it
+    rgb = cream[None, None] * (1 - vis) + green * vis
+    shade_img = Image.fromarray(np.round(np.clip(shade, 0, 1) * 255).astype(np.uint8), "L").resize(
+        (width, height), Image.Resampling.BICUBIC
+    )
+    factor = (0.55 + 0.62 * (np.asarray(shade_img) / 255.0))[..., None]
+    rgb = np.clip(rgb * factor, 0, 255).astype(np.uint8)
+    Image.fromarray(rgb, "RGB").save(out_dir / "terrain-forest.png", optimize=True)
+    print(f"  forest: TCD canopy {float((d > 0).mean() * 100):.0f}% of bbox")
+    return "terrain-forest.png"
+
+
 def load_border_lines(lo_lo, lo_hi, la_lo, la_hi, cache_key):
     path = DEFAULT_CACHE / f"border_{cache_key}.geojson"
     if not path.exists():
@@ -536,6 +588,7 @@ def build_assets(gpx_path: Path, final_image: Path, angles_image: Path, out_dir:
     if os.environ.get("WEB_BAKE_RELIEF", "0") in {"1", "true", "yes"}:
         bake_hillshade_into_topo(out_dir / "terrain-texture.png", relief["reference"])
     draw_dem_contours(out_dir / "terrain-texture.png", relief_heights)
+    forest_texture = export_forest_texture(lo_lo, lo_hi, la_lo, la_hi, out_dir, relief["reference"])
     border_count = export_border_overlay(lo_lo, lo_hi, la_lo, la_hi, lat0, x0, y0, heights, bbox_key, out_dir)
     terrain = {
         "gridSize": grid_size,
@@ -567,6 +620,7 @@ def build_assets(gpx_path: Path, final_image: Path, angles_image: Path, out_dir:
             "multiHillshadeTexture": "terrain-multishade.png",
             "slopeTexture": "terrain-slope.png",
             "hypsoTexture": "terrain-hypso.png",
+            "forestTexture": forest_texture,
             "normalTexture": "terrain-normal.png",
             "demSource": elevation_source["kind"],
             "demSourceLabel": elevation_source["name"],

@@ -9,6 +9,7 @@ export type TextureMode =
   | "multi-shade"
   | "slope"
   | "hypsometric"
+  | "forest"
   | "surface";
 
 export type AppStatus = "ready" | "loading" | "empty" | "error" | "unsupported";
@@ -42,6 +43,7 @@ export type ValleyManifest = {
     multiHillshadeTexture?: string;
     slopeTexture?: string;
     hypsoTexture?: string;
+    forestTexture?: string | null;
     normalTexture?: string;
     demSource?: string;
     demSourceLabel?: string;
@@ -82,9 +84,12 @@ export type SavedShot = {
   showRoute: boolean;
 };
 
+export type ViewMode = "2d" | "3d";
+
 export type ViewerState = {
   valleyId: string | null;
   routeId: string | null;
+  viewMode: ViewMode;
   cameraMode: CameraMode;
   quality: Quality;
   textureMode: TextureMode;

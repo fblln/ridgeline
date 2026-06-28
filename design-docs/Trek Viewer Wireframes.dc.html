@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  .wf{position:relative;width:460px;height:300px;background:#fff;border:1.5px solid #cdd2d8;border-radius:7px;box-shadow:0 1px 3px rgba(0,0,0,.1);overflow:hidden;font-family:Inter,system-ui,sans-serif;}
+  .lab{position:absolute;top:-26px;left:2px;font-family:'Caveat',cursive;font-size:20px;font-weight:700;color:#3b4654;}
+  .bar{height:7px;border-radius:4px;background:#d7dbe0;}
+  .box{border:1.4px solid #c4c9d0;background:#f3f5f7;border-radius:5px;}
+  .hatch{background-image:repeating-linear-gradient(135deg,#e4e7ea 0 7px,#eef0f2 7px 14px);}
+  .pill{display:inline-flex;align-items:center;gap:5px;border:1.4px solid #c4c9d0;border-radius:6px;background:#f3f5f7;font-size:9.5px;font-weight:600;color:#5b6675;padding:4px 8px;}
+  .tog{display:flex;border:1.4px solid #c4c9d0;border-radius:6px;overflow:hidden;font-size:9.5px;font-weight:800;}
+  .tog div{padding:4px 9px;color:#7b8694;}
+  .on{background:#1f2a36;color:#fff!important;}
+  .acc{color:#0f7d6b;}
+  .kc{display:grid;place-items:center;width:16px;height:16px;border:1.3px solid #b3bac3;border-radius:3px;background:#fff;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:8.5px;font-weight:600;color:#46505d;}
+  svg .rt{stroke:#e5453a;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+  svg .bd{stroke:#3f6fe0;stroke-width:2;fill:none;stroke-linecap:round;}
+</style>
+</helmet>
+
+<!-- ===== TITLE ===== -->
+<div style="position:absolute;left:80px;top:40px;font-family:'Caveat',cursive;font-weight:700;font-size:42px;color:#26313c;">Trek Viewer — core flows</div>
+<div style="position:absolute;left:84px;top:92px;font-family:Inter,sans-serif;font-size:13px;color:#6b7785;width:760px;line-height:1.5;">Search a place, drop a lat/long, or import a GPX — then explore the valley from the sky in 2D / 3D. Low-fi structure &amp; flow only; visuals are settled in the dark hi-fi mockup.</div>
+
+<!-- ============ ROW 1 : IMPORT ============ -->
+<div style="position:absolute;left:80px;top:150px;font-family:'Caveat',cursive;font-weight:700;font-size:24px;color:#c2541f;">1 · Start anywhere</div>
+
+<!-- A. Empty / drop -->
+<div style="position:absolute;left:80px;top:210px;width:460px;">
+  <div class="lab" data-drags-parent="1">A · Entry — pick a place</div>
+  <div class="wf">
+    <div style="position:absolute;left:0;right:0;top:0;height:34px;border-bottom:1.4px solid #e3e6ea;display:flex;align-items:center;gap:8px;padding:0 12px;">
+      <span style="width:18px;height:18px;border-radius:5px;background:#dfe3e8;"></span>
+      <span style="font-family:'Caveat',cursive;font-size:16px;font-weight:700;color:#46505d;">Valley Viewer</span>
+    </div>
+    <div style="position:absolute;inset:34px 0 0 0;padding:16px;display:flex;flex-direction:column;gap:12px;" data-comment-anchor="88b6820203-div">
+      <div class="tog" style="font-size:9.5px;align-self:flex-start;" data-comment-anchor="a557358340-div"><div class="on">Search a place</div><div>Lat, Long</div><div>Import GPX</div></div>
+      <div class="box" style="height:34px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#fff;"><span style="font-size:13px;color:#9aa3ad;">⌕</span><span style="font-size:11px;color:#7b8694;">Search a place…</span><span style="flex:1;"></span><span style="font-size:9px;color:#c2c7cd;">⌄</span></div>
+      <div style="display:flex;gap:12px;align-items:stretch;">
+        <div class="box hatch" style="width:104px;height:104px;position:relative;flex:none;">
+          <div style="position:absolute;inset:15px;border:1.6px dashed #8a94a0;border-radius:3px;"></div>
+          <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);font-size:15px;color:#e5453a;">⚲</div>
+          <div style="position:absolute;left:50%;bottom:4px;transform:translateX(-50%);font-size:8px;font-weight:700;color:#5b6675;background:#fff;padding:0 3px;">20 km</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:8px;">
+          <div style="font-size:10.5px;color:#6b7785;line-height:1.5;">Loads a 20 × 20 km tile around the point. Explore free-camera; drop or import a route anytime.</div>
+          <div class="pill" style="justify-content:center;background:#1f2a36;color:#fff;border-color:#1f2a36;padding:9px;">Load area</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- B. Parsing -->
+<div style="position:absolute;left:610px;top:210px;width:460px;">
+  <div class="lab" data-drags-parent="1">B · Reading the file</div>
+  <div class="wf">
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+      <div style="width:46px;height:46px;border-radius:50%;border:3px solid #e0e3e7;border-top-color:#0f7d6b;"></div>
+      <div style="font-family:'Caveat',cursive;font-size:21px;font-weight:700;color:#46505d;">Sampling terrain + route…</div>
+      <div style="width:240px;height:7px;border-radius:4px;background:#e7e9ed;overflow:hidden;"><div style="width:62%;height:100%;background:#0f7d6b;"></div></div>
+      <div style="display:flex;gap:8px;"><span class="pill">GPX ✓</span><span class="pill">LiDAR mesh</span><span class="pill" style="opacity:.5;">textures</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- C. Loaded -->
+<div style="position:absolute;left:1140px;top:210px;width:460px;">
+  <div class="lab" data-drags-parent="1">C · Loaded · 3D</div>
+  <div class="wf hatch">
+    <svg viewBox="0 0 460 300" style="position:absolute;inset:0;width:100%;height:100%;"><path class="rt" d="M120,280 L150,210 L140,170 L190,150 L240,170 L300,120 L360,90"/><path class="bd" d="M300,120 L350,95 L400,110"/><circle cx="360" cy="90" r="4" fill="#e5453a"/></svg>
+    <div style="position:absolute;left:0;right:0;top:0;height:32px;background:rgba(255,255,255,.85);display:flex;align-items:center;gap:8px;padding:0 10px;">
+      <span class="pill" style="background:#fff;">▰ Escursione.gpx · 21.6km</span><span style="flex:1;"></span>
+      <span class="tog"><div>2D</div><div class="on">3D</div></span>
+    </div>
+    <div class="box" style="position:absolute;left:10px;top:42px;width:90px;height:70px;background:rgba(255,255,255,.9);"></div>
+    <div class="box" style="position:absolute;right:10px;top:42px;width:96px;height:120px;background:rgba(255,255,255,.9);"></div>
+    <div class="box" style="position:absolute;left:50%;transform:translateX(-50%);bottom:34px;width:200px;height:30px;background:rgba(255,255,255,.9);"></div>
+    <div class="box" style="position:absolute;left:10px;right:10px;bottom:8px;height:20px;background:rgba(255,255,255,.9);"></div>
+  </div>
+</div>
+
+<!-- ============ ROW 2 : EXPLORE ============ -->
+<div style="position:absolute;left:80px;top:590px;font-family:'Caveat',cursive;font-weight:700;font-size:24px;color:#c2541f;">2 · Explore the valley</div>
+
+<!-- D. 2D top-down -->
+<div style="position:absolute;left:80px;top:650px;width:460px;">
+  <div class="lab" data-drags-parent="1">D · 2D map (top-down)</div>
+  <div class="wf">
+    <div style="position:absolute;inset:0;" class="hatch"></div>
+    <svg viewBox="0 0 460 300" style="position:absolute;inset:0;width:100%;height:100%;"><path class="rt" d="M90,250 L130,200 L120,150 L180,120 L260,140 L320,90 L380,70"/><path class="bd" d="M320,90 L360,75 L410,95"/></svg>
+    <span class="tog" style="position:absolute;right:10px;top:10px;"><div class="on">2D</div><div>3D</div></span>
+    <div class="pill" style="position:absolute;left:10px;bottom:10px;background:#fff;">⌖ 44.906, 6.759 · 2368m</div>
+    <div style="position:absolute;right:10px;bottom:10px;width:60px;height:6px;border:1.4px solid #5b6675;border-top:none;"></div>
+  </div>
+</div>
+
+<!-- E. 3D from sky -->
+<div style="position:absolute;left:610px;top:650px;width:460px;">
+  <div class="lab" data-drags-parent="1">E · 3D from the sky</div>
+  <div class="wf">
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,#cdddea 0 34%,#eef0f2 34%);"></div>
+    <div style="position:absolute;left:50%;bottom:-40px;width:560px;height:300px;margin-left:-280px;transform:perspective(420px) rotateX(58deg);transform-origin:bottom;" class="hatch box"></div>
+    <svg viewBox="0 0 460 300" style="position:absolute;inset:0;width:100%;height:100%;"><path class="rt" d="M150,280 L180,230 L175,200 L215,185 L260,205 L310,165 L355,140"/></svg>
+    <span class="tog" style="position:absolute;right:10px;top:10px;"><div>2D</div><div class="on">3D</div></span>
+    <div class="pill" style="position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);background:rgba(255,255,255,.85);">⌖ drag to look · WSADQE to fly</div>
+    <div style="position:absolute;left:12px;bottom:12px;display:flex;flex-direction:column;gap:5px;background:rgba(255,255,255,.92);border:1.4px solid #c4c9d0;border-radius:6px;padding:8px;">
+      <div style="font-size:8px;font-weight:800;color:#8a94a0;letter-spacing:.05em;">FLY · FREE CAMERA</div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <div style="display:grid;grid-template-columns:repeat(3,16px);grid-auto-rows:16px;gap:3px;">
+          <span></span><span class="kc">W</span><span></span>
+          <span class="kc">A</span><span class="kc">S</span><span class="kc">D</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;align-items:center;"><span class="kc">E</span><span class="kc">Q</span></div>
+      </div>
+      <div style="font-size:7.5px;color:#9aa3ad;">move &amp; strafe · Q/E down&amp;up · shift = faster</div>
+    </div>
+  </div>
+</div>
+
+<!-- F. Layer switch -->
+<div style="position:absolute;left:1140px;top:650px;width:460px;">
+  <div class="lab" data-drags-parent="1">F · Map layer switch</div>
+  <div class="wf hatch">
+    <div style="position:absolute;right:10px;top:10px;width:150px;background:#fff;border:1.4px solid #c4c9d0;border-radius:6px;padding:9px;">
+      <div style="font-size:9px;font-weight:800;color:#8a94a0;letter-spacing:.06em;margin-bottom:8px;">MAP LAYER</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <div class="box" style="height:34px;"></div>
+        <div class="box" style="height:34px;border-color:#0f7d6b;border-width:2px;position:relative;"><span style="position:absolute;bottom:2px;left:3px;font-size:7.5px;font-weight:700;" class="acc">LiDAR shade</span></div>
+        <div class="box" style="height:34px;"></div>
+        <div class="box" style="height:34px;"></div>
+      </div>
+      <div style="margin-top:8px;font-size:8px;color:#9aa3ad;">Topo · LiDAR shade · Slope · Hypso</div>
+    </div>
+    <div style="position:absolute;left:14px;top:14px;font-family:'Caveat',cursive;font-size:18px;color:#46505d;font-weight:700;">grayscale<br>hillshade<br>look</div>
+  </div>
+</div>
+
+<!-- ============ ROW 3 : COMPOSE & OUTPUT ============ -->
+<div style="position:absolute;left:80px;top:1030px;font-family:'Caveat',cursive;font-weight:700;font-size:24px;color:#c2541f;">3 · Compose &amp; capture</div>
+
+<!-- G. Route follow -->
+<div style="position:absolute;left:80px;top:1090px;width:460px;">
+  <div class="lab" data-drags-parent="1">G · Route-follow replay</div>
+  <div class="wf hatch">
+    <svg viewBox="0 0 460 300" style="position:absolute;inset:0;width:100%;height:100%;"><path class="rt" d="M120,250 L160,200 L150,160 L210,140 L270,160 L330,110"/><circle cx="210" cy="140" r="6" fill="#fff" stroke="#e5453a" stroke-width="2.5"/></svg>
+    <div style="position:absolute;left:10px;right:10px;bottom:10px;background:#fff;border:1.4px solid #c4c9d0;border-radius:6px;height:30px;display:flex;align-items:center;gap:9px;padding:0 10px;">
+      <span style="font-size:13px;">▶</span>
+      <div style="flex:1;height:6px;border-radius:4px;background:#e7e9ed;position:relative;"><div style="width:34%;height:100%;border-radius:4px;background:#e5453a;"></div><span style="position:absolute;left:34%;top:50%;transform:translate(-50%,-50%);width:11px;height:11px;border-radius:50%;background:#fff;border:2px solid #e5453a;"></span></div>
+      <span style="font-size:9px;font-weight:700;color:#5b6675;">34%</span>
+    </div>
+  </div>
+</div>
+
+<!-- H. Save shot -->
+<div style="position:absolute;left:610px;top:1090px;width:460px;">
+  <div class="lab" data-drags-parent="1">H · Save a viewpoint</div>
+  <div class="wf hatch">
+    <div style="position:absolute;right:10px;top:10px;width:150px;background:#fff;border:1.4px solid #c4c9d0;border-radius:6px;padding:9px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-size:9px;font-weight:800;color:#8a94a0;letter-spacing:.06em;">SHOT LIST</span><span style="width:18px;height:18px;border:1.4px solid #0f7d6b;border-radius:5px;display:grid;place-items:center;color:#0f7d6b;font-size:12px;">+</span></div>
+      <div class="box" style="height:30px;border-color:#e0a93f;border-width:2px;background:#fdf6e8;margin-bottom:6px;display:flex;align-items:center;padding:0 6px;font-size:8px;font-weight:700;color:#9a7320;">★ View 4 (new)</div>
+      <div class="box" style="height:26px;margin-bottom:5px;"></div>
+      <div class="box" style="height:26px;"></div>
+    </div>
+    <div style="position:absolute;left:16px;bottom:16px;font-family:'Caveat',cursive;font-size:17px;color:#46505d;font-weight:700;">camera + FOV +<br>layer saved together</div>
+  </div>
+</div>
+
+<!-- I. Export -->
+<div style="position:absolute;left:1140px;top:1090px;width:460px;">
+  <div class="lab" data-drags-parent="1">I · Export hi-res image</div>
+  <div class="wf">
+    <div style="position:absolute;inset:0;background:rgba(20,28,36,.5);" class="hatch"></div>
+    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:300px;background:#fff;border:1.4px solid #c4c9d0;border-radius:7px;padding:12px;">
+      <div style="font-size:9px;font-weight:800;color:#8a94a0;letter-spacing:.06em;margin-bottom:8px;">CAPTURED VIEW · 7200×5400</div>
+      <div class="box hatch" style="height:96px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;"><div class="pill" style="flex:1;justify-content:center;background:#1f2a36;color:#fff;border-color:#1f2a36;">⤓ Download PNG</div><div class="pill">Close</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- post-its -->
+<div style="position:absolute;left:610px;top:150px;width:230px;background:#fef4a8;padding:11px 13px;font-family:Inter,sans-serif;font-size:11px;line-height:1.45;color:#5b4a14;box-shadow:0 1px 3px rgba(0,0,0,.12);transform:rotate(-1.5deg);">Entry is place-first: search or drop lat/long to load a 20×20 km area anywhere. GPX import is the third tab when you already have a track.</div>
+<div style="position:absolute;left:1140px;top:1455px;width:240px;background:#fef4a8;padding:11px 13px;font-family:Inter,sans-serif;font-size:11px;line-height:1.45;color:#5b4a14;box-shadow:0 1px 3px rgba(0,0,0,.12);transform:rotate(1.2deg);">2D / 3D is one toggle on the same scene — never a reload. Layer, exaggeration &amp; camera all persist across it.</div>
+
+</x-dc>
+</body>
+</html>

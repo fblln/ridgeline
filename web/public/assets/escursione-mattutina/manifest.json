@@ -37,7 +37,8 @@
     "widthM": 5988.46,
     "depthM": 4805.36,
     "minHeightM": 1412.06,
-    "maxHeightM": 2636.93
+    "maxHeightM": 2636.93,
+    "forestTexture": "terrain-forest.png"
   },
   "reference": {
     "render": "reference-render.png",
