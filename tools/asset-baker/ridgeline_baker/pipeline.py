@@ -30,12 +30,12 @@ for _thread_env in (
 
 import numpy as np
 import rasterio
-from rasterio.crs import CRS
-from rasterio.transform import Affine
-from rasterio.warp import Resampling, reproject
 from contourpy import contour_generator
 from PIL import Image, ImageDraw, ImageEnhance
 from pyproj import Transformer
+from rasterio.crs import CRS
+from rasterio.transform import Affine
+from rasterio.warp import Resampling, reproject
 from scipy.ndimage import gaussian_filter, map_coordinates
 from scipy.signal import savgol_filter
 
