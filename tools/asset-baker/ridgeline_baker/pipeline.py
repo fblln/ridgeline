@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: E402
 """Export a GPX trek into static assets for the web viewer.
 
 The viewer consumes this generated heightfield, route, texture, and manifest
