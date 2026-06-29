@@ -125,18 +125,24 @@ mod tests {
     fn read_band_f64_reads_geotiff_data() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("band.tif");
-        let driver = DriverManager::get_driver_by_name("GTiff").unwrap();
-        let mut ds = driver
-            .create_with_band_type::<f64, _>(&path, 2, 2, 1)
-            .unwrap();
-        ds.set_geo_transform(&[7.0, 0.1, 0.0, 45.2, 0.0, -0.1])
-            .unwrap();
-        ds.set_spatial_ref(&wgs84().unwrap()).unwrap();
-        let mut band = ds.rasterband(1).unwrap();
-        let mut buffer = Buffer::new((2, 2), vec![10.0, 20.0, 30.0, 40.0]);
-        band.write((0, 0), (2, 2), &mut buffer).unwrap();
-        drop(band);
-        drop(ds);
+
+        {
+            let driver = DriverManager::get_driver_by_name("GTiff").unwrap();
+            let mut ds = driver
+                .create_with_band_type::<f64, _>(&path, 2, 2, 1)
+                .unwrap();
+
+            ds.set_geo_transform(&[7.0, 0.1, 0.0, 45.2, 0.0, -0.1])
+                .unwrap();
+            ds.set_spatial_ref(&wgs84().unwrap()).unwrap();
+
+            {
+                let mut band = ds.rasterband(1).unwrap();
+                let mut buffer = Buffer::new((2, 2), vec![10.0, 20.0, 30.0, 40.0]);
+
+                band.write((0, 0), (2, 2), &mut buffer).unwrap();
+            }
+        }
 
         let band = read_band_f64(&path).unwrap();
         assert_eq!((band.width, band.height), (2, 2));
