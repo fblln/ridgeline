@@ -27,7 +27,8 @@ The repo is a small monorepo:
 | Path | Purpose |
 |---|---|
 | `web/` | Vite + React + Three.js terrain viewer and local GPX import API. |
-| `tools/asset-baker/` | Python terrain/texture/route asset generator. |
+| `tools/asset-baker/` | Legacy Python terrain/texture/route asset generator. |
+| `tools/asset-baker-rs/` | Rust terrain/texture/route asset generator and import-worker replacement. |
 | `examples/gpx/` | Sample GPX input used to regenerate the bundled showcase route locally. |
 
 ## What It Does
@@ -68,6 +69,33 @@ Bake the sample asset package (writes ignored runtime assets under
 
 ```bash
 python tools/asset-baker/export_web_example.py examples/gpx/Escursione_mattutina.gpx
+```
+
+The Rust baker can generate the same viewer asset package and is available for
+A/B import testing:
+
+```bash
+cd tools/asset-baker-rs
+cargo build --release
+cd ../..
+tools/asset-baker-rs/target/release/baker examples/gpx/Escursione_mattutina.gpx
+```
+
+The local GPX import API uses the Rust worker by default. Start the web app with:
+
+```bash
+cd web
+npm run dev
+```
+
+(Set `RIDGELINE_BAKER=python` to fall back to the Python baker.)
+
+The Rust crate also builds a standalone import server. After building the web
+bundle, run:
+
+```bash
+cd tools/asset-baker-rs
+cargo run --release --bin server
 ```
 
 ### 2. Run the web app

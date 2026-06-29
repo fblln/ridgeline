@@ -1,0 +1,21 @@
+# Build artifacts
+**/target/
+**/node_modules/
+**/dist/
+**/.venv/
+__pycache__/
+**/*.pyc
+
+# Machine-specific local cargo config points the gdal crate at a local conda
+# GDAL — the image uses the system (apt) GDAL instead, so it must NOT be copied in.
+**/.cargo/config.toml
+
+# Generated assets, caches, local state
+web/public/generated/
+.cache/
+*.log
+
+# VCS / editor / CI
+.git/
+.github/
+**/.DS_Store

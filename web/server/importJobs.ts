@@ -1,5 +1,5 @@
 /**
- * Local GPX import job runner. It owns temporary upload paths, Python worker
+ * Local GPX import job runner. It owns temporary upload paths, asset worker
  * lifecycle, progress parsing, and trace propagation into the asset baker.
  */
 import { type ChildProcess, spawn } from "node:child_process";
@@ -116,6 +116,15 @@ async function startJob({
   const exporter = path.join(repoRoot, "tools", "asset-baker", "export_web_example.py");
   const missingReference = path.join(uploadRoot, `${job.id}-reference-not-required.png`);
   const missingAngles = path.join(uploadRoot, `${job.id}-angles-not-required.png`);
+  const worker = assetWorkerCommand({
+    repoRoot,
+    python,
+    exporter,
+    gpxPath,
+    missingReference,
+    missingAngles,
+    outDir,
+  });
 
   const jobSpan: Span = tracer.startSpan(
     "import-job",
@@ -126,7 +135,7 @@ async function startJob({
   );
   const traceparent = traceparentFor(jobSpan);
 
-  const child = spawn(python, [exporter, gpxPath, missingReference, missingAngles, outDir], {
+  const child = spawn(worker.command, worker.args, {
     cwd: repoRoot,
     env: {
       ...process.env,
@@ -199,4 +208,33 @@ async function startJob({
     }
     jobSpan.end();
   });
+}
+
+function assetWorkerCommand({
+  repoRoot,
+  python,
+  exporter,
+  gpxPath,
+  missingReference,
+  missingAngles,
+  outDir,
+}: {
+  repoRoot: string;
+  python: string;
+  exporter: string;
+  gpxPath: string;
+  missingReference: string;
+  missingAngles: string;
+  outDir: string;
+}): { command: string; args: string[] } {
+  const configured = process.env.RIDGELINE_BAKER;
+  const rustBaker = path.join(repoRoot, "tools", "asset-baker-rs", "target", "release", "baker");
+
+  // The Rust baker is the default. Set RIDGELINE_BAKER=python (or 0/false) to use
+  // the Python baker, or a path to point at a custom binary.
+  if (configured === "python" || configured === "0" || configured === "false") {
+    return { command: python, args: [exporter, gpxPath, missingReference, missingAngles, outDir] };
+  }
+  const binary = !configured || configured === "1" || configured === "true" ? rustBaker : configured;
+  return { command: binary, args: [gpxPath, missingReference, missingAngles, outDir] };
 }

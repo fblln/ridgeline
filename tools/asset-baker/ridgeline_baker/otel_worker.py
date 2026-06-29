@@ -15,7 +15,11 @@ _provider = None
 
 def init_tracing():
     global _tracer, _provider
-    if _tracer is not None or os.environ.get("OTEL_SDK_DISABLED") == "true":
+    sdk_disabled = os.environ.get("OTEL_SDK_DISABLED", "").lower() in {"1", "true", "yes"}
+    has_export_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") or os.environ.get(
+        "OTEL_EXPORTER_OTLP_ENDPOINT"
+    )
+    if _tracer is not None or sdk_disabled or not has_export_endpoint:
         return _tracer
     try:
         from opentelemetry import trace
@@ -25,10 +29,12 @@ def init_tracing():
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-        endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318").rstrip("/")
+        endpoint = os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") or (
+            os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "").rstrip("/") + "/v1/traces"
+        )
         service = os.environ.get("OTEL_SERVICE_NAME", "ridgeline-worker")
         _provider = TracerProvider(resource=Resource.create({"service.name": service}))
-        _provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces")))
+        _provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
         trace.set_tracer_provider(_provider)
         URLLibInstrumentor().instrument()  # each IGN / Piemonte / tile request becomes a child span
         _tracer = trace.get_tracer("ridgeline.worker")
