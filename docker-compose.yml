@@ -1,0 +1,24 @@
+# Local run of the Ridgeline Rust worker:  docker compose up --build
+# Then open http://localhost:8787
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8787:8787"
+    environment:
+      RIDGELINE_SERVER_ADDR: 0.0.0.0:8787
+      RUST_LOG: info
+      # Point at a collector to export traces; unset = no export.
+      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    volumes:
+      # Persist the DEM/tile cache so re-bakes don't re-fetch the sources.
+      - trek-cache:/app/cache
+      # Persist baked outputs.
+      - generated:/app/web/public/generated
+    restart: unless-stopped
+
+volumes:
+  trek-cache:
+  generated:

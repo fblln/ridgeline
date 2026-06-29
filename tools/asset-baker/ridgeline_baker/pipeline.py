@@ -16,8 +16,23 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+# Keep Python's native numeric/image stack from creating broad implicit worker
+# pools. Callers can still override these before launching the baker.
+for _thread_env in (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+    "GDAL_NUM_THREADS",
+):
+    os.environ.setdefault(_thread_env, "1")
+
 import numpy as np
 import rasterio
+from rasterio.crs import CRS
+from rasterio.transform import Affine
+from rasterio.warp import Resampling, reproject
 from contourpy import contour_generator
 from PIL import Image, ImageDraw, ImageEnhance
 from pyproj import Transformer
@@ -37,6 +52,8 @@ def progress(pct: int, label: str):
 
 
 FETCH_WORKERS = max(1, int(os.environ.get("WEB_FETCH_WORKERS", "16")))
+TOPO_WORKERS = max(1, int(os.environ.get("WEB_TOPO_WORKERS", "4")))
+RELIEF_ENCODE_WORKERS = max(1, int(os.environ.get("WEB_RELIEF_ENCODE_WORKERS", "4")))
 
 
 def download(url, dest=None, headers=None, timeout=60, retries=3):
@@ -58,7 +75,7 @@ def download(url, dest=None, headers=None, timeout=60, retries=3):
     raise last_error
 
 
-def parallel_map(fn, items, label=None):
+def parallel_map(fn, items, label=None, workers=None):
     """Run fn over items across a thread pool (I/O-bound tile/DEM fetches).
 
     With `label`, each task runs inside a named span (e.g. 'topo-tile') so the
@@ -68,15 +85,42 @@ def parallel_map(fn, items, label=None):
     """
     items = list(items)
     call = (lambda item: otel.run_in_span(label, fn, item)) if label else fn
-    if FETCH_WORKERS <= 1 or len(items) <= 1:
+    workers = FETCH_WORKERS if workers is None else max(1, int(workers))
+    if workers <= 1 or len(items) <= 1:
         return [call(item) for item in items]
     bound = otel.context_binder()(call)
     results = [None] * len(items)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=FETCH_WORKERS) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         future_to_index = {pool.submit(bound, item): i for i, item in enumerate(items)}
         for future in concurrent.futures.as_completed(future_to_index):
             results[future_to_index[future]] = future.result()
     return results
+
+
+IGN_PROBE_RES = 64
+
+
+def _ign_has_coverage(lo_lo, lo_hi, la_lo, la_hi):
+    """One small WMS GetMap over the whole bbox; True if any cell carries real
+    elevation (IGN returns large-negative nodata outside France coverage). A
+    non-BIL error body reads as noise -> at worst a false "covered" that falls
+    through to the normal full fetch; only a genuine all-nodata response reports
+    no coverage. Misses sub-~100 m coverage slivers, fine for a fill source."""
+    q = {
+        "SERVICE": "WMS",
+        "VERSION": "1.3.0",
+        "REQUEST": "GetMap",
+        "STYLES": "",
+        "LAYERS": "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES",
+        "CRS": "CRS:84",
+        "BBOX": f"{lo_lo},{la_lo},{lo_hi},{la_hi}",
+        "WIDTH": IGN_PROBE_RES,
+        "HEIGHT": IGN_PROBE_RES,
+        "FORMAT": "image/x-bil;bits=32",
+    }
+    url = "https://data.geopf.fr/wms-r/wms?" + urllib.parse.urlencode(q)
+    arr = np.frombuffer(download(url, timeout=30), "<f4")
+    return bool(np.any(np.isfinite(arr) & (arr > -1000)))
 
 
 def fetch_ign_grid(lo_lo, lo_hi, la_lo, la_hi, cache_key):
@@ -89,6 +133,16 @@ def fetch_ign_grid(lo_lo, lo_hi, la_lo, la_hi, cache_key):
     cache = DEFAULT_CACHE / f"web_ignhd_{cache_key}_{target_res_m:.2f}m_{width}x{height}.npy"
     if cache.exists():
         return np.load(cache)
+
+    # IGN HD only covers France. A border-adjacent Italian track would otherwise
+    # download the full (here ~150 MB) all-nodata grid just to discard it. One
+    # cheap 64x64 probe settles coverage first; when dry, a tiny all-NaN grid is
+    # semantically identical to the old full all-NaN grid (Piemonte fills it).
+    if not _ign_has_coverage(lo_lo, lo_hi, la_lo, la_hi):
+        dem = np.full((IGN_PROBE_RES, IGN_PROBE_RES), np.nan, dtype=np.float32)
+        print("  ign: no coverage for this area (Piemonte DTM only)")
+        np.save(cache, dem)
+        return dem
 
     dem = np.empty((height, width), dtype=np.float32)
     tiles = [
@@ -148,30 +202,47 @@ def fetch_piemonte_dtm(lo_lo, lo_hi, la_lo, la_hi, cache_key):
         )
         download(url, dest=path, timeout=180)
     with rasterio.open(path) as src:
-        dem = src.read(1).astype(np.float32)
+        dem = src.read(1).astype(np.float64)
         if src.nodata is not None:
             dem[dem == src.nodata] = np.nan
-        inv = ~src.transform
-    return {"dem": dem, "inv": inv, "to_utm": to_utm, "path": path.name}
+        transform = src.transform
+        crs = src.crs
+    return {"dem": dem, "transform": transform, "crs": crs}
 
 
-def sample_piemonte(lon, lat, piemonte_source):
-    lon_arr = np.asarray(lon)
-    lat_arr = np.asarray(lat)
-    shape = lon_arr.shape
-    east, north = piemonte_source["to_utm"].transform(lon_arr.ravel(), lat_arr.ravel())
-    cols, rows = piemonte_source["inv"] * (east, north)
-    dem = piemonte_source["dem"]
-    order = int(os.environ.get("WEB_PIEMONTE_SAMPLE_ORDER", "1"))
-    values = map_coordinates(dem, [rows, cols], order=order, mode="nearest")
-    return values.reshape(shape)
+def _node_transform(lo_lo, lo_hi, la_lo, la_hi, nx, ny):
+    """North-up affine whose pixel CENTERS sit on the lon/lat grid nodes
+    (linspace endpoints inclusive). The output heights grid is node-based."""
+    px = (lo_hi - lo_lo) / (nx - 1)
+    py = (la_hi - la_lo) / (ny - 1)
+    return Affine(px, 0.0, lo_lo - px / 2, 0.0, -py, la_hi + py / 2)
 
 
-def sample_ign(lon, lat, lo_lo, lo_hi, la_lo, la_hi, source_dem):
-    height, width = source_dem.shape
-    c = (lon - lo_lo) / (lo_hi - lo_lo) * (width - 1)
-    r = (la_hi - lat) / (la_hi - la_lo) * (height - 1)
-    return map_coordinates(source_dem, [r, c], order=3, mode="nearest")
+def _pixel_transform(lo_lo, lo_hi, la_lo, la_hi, nx, ny):
+    """North-up affine for a pixel-extent raster (corners = bbox), the true
+    georeferencing of the WMS-fetched IGN grid."""
+    px = (lo_hi - lo_lo) / nx
+    py = (la_hi - la_lo) / ny
+    return Affine(px, 0.0, lo_lo, 0.0, -py, la_hi)
+
+
+def _warp_cubic(src, src_transform, src_crs, dst_transform, nx, ny):
+    """GDAL cubic reproject onto the node-based target grid. tolerance=0 forces
+    the exact transformer so the Rust GDALReprojectImage path matches bit-for-bit."""
+    dst = np.full((ny, nx), np.nan, dtype=np.float64)
+    reproject(
+        source=np.ascontiguousarray(src),
+        destination=dst,
+        src_transform=src_transform,
+        src_crs=src_crs,
+        src_nodata=np.nan,
+        dst_transform=dst_transform,
+        dst_crs=CRS.from_epsg(4326),
+        dst_nodata=np.nan,
+        resampling=Resampling.cubic,
+        tolerance=0.0,
+    )
+    return dst
 
 
 def build_elevation_source(lo_lo, lo_hi, la_lo, la_hi, cache_key):
@@ -192,22 +263,48 @@ def build_elevation_source(lo_lo, lo_hi, la_lo, la_hi, cache_key):
     }
 
 
+def warm_ign_cache(lo_lo, lo_hi, la_lo, la_hi, cache_key):
+    """Best-effort: download the IGN grid into the disk cache so a later
+    build_elevation_source (the authoritative reader) hits warm cache."""
+    fetch_ign_grid(lo_lo, lo_hi, la_lo, la_hi, cache_key)
+
+
+def warm_piemonte_cache(lo_lo, lo_hi, la_lo, la_hi, cache_key):
+    """Best-effort: download the Piemonte DTM GeoTIFF into the disk cache."""
+    fetch_piemonte_dtm(lo_lo, lo_hi, la_lo, la_hi, cache_key)
+
+
+def warm_border_cache(lo_lo, lo_hi, la_lo, la_hi, cache_key):
+    """Best-effort: warm the Overpass border-line cache."""
+    load_border_lines(lo_lo, lo_hi, la_lo, la_hi, cache_key)
+
+
 def sample_elevation(lon, lat, lo_lo, lo_hi, la_lo, la_hi, source):
+    # DEM sampling is a GDAL cubic reproject onto the target grid (bicubic), the
+    # same operation the Rust baker runs via GDALReprojectImage — so the two stay
+    # bit-for-bit. Sources warp independently; Piemonte is primary, IGN fills its
+    # nodata holes.
+    ny, nx = np.asarray(lon).shape
+    dst_t = _node_transform(lo_lo, lo_hi, la_lo, la_hi, nx, ny)
+    wgs84 = CRS.from_epsg(4326)
+    ign = source["ign"]
+    ih, iw = ign.shape
+    ign_warp = _warp_cubic(ign, _pixel_transform(lo_lo, lo_hi, la_lo, la_hi, iw, ih), wgs84, dst_t, nx, ny)
     if source["kind"] == "ign":
-        return sample_ign(lon, lat, lo_lo, lo_hi, la_lo, la_hi, source["ign"])
-    values = sample_piemonte(lon, lat, source["piemonte"])
-    missing = ~np.isfinite(values)
-    if np.any(missing):
-        fill = sample_ign(np.asarray(lon)[missing], np.asarray(lat)[missing], lo_lo, lo_hi, la_lo, la_hi, source["ign"])
-        values = values.copy()
-        values[missing] = fill
-    # If both sources had gaps (Piemonte hole + no IGN coverage), flatten the
-    # remaining NaNs to the lowest known elevation so terrain math stays finite.
-    still_missing = ~np.isfinite(values)
-    if np.any(still_missing):
-        finite = values[~still_missing]
-        values = values.copy()
-        values[still_missing] = float(finite.min()) if finite.size else 0.0
+        values = ign_warp
+    else:
+        pie = source["piemonte"]
+        pie_warp = _warp_cubic(pie["dem"], pie["transform"], pie["crs"], dst_t, nx, ny)
+        values = np.where(np.isfinite(pie_warp), pie_warp, ign_warp)
+    # Warp output is north-up; flip to south-up (row 0 = la_lo) to match the
+    # meshgrid/heights convention used everywhere downstream.
+    values = np.flipud(values).copy()
+    # Both sources gapped (Piemonte hole + no IGN coverage): flatten remaining
+    # NaNs to the lowest known elevation so terrain math stays finite.
+    still = ~np.isfinite(values)
+    if np.any(still):
+        finite = values[~still]
+        values[still] = float(finite.min()) if finite.size else 0.0
     return values
 
 
@@ -260,7 +357,7 @@ def export_topographic_texture(lo_lo, lo_hi, la_lo, la_hi, out_path):
     ty0, ty1 = int(y_n), int(y_s)
     mosaic = Image.new("RGB", ((tx1 - tx0 + 1) * 256, (ty1 - ty0 + 1) * 256))
     coords = [(tx, ty) for tx in range(tx0, tx1 + 1) for ty in range(ty0, ty1 + 1)]
-    tiles = parallel_map(lambda c: (c, opentopo_tile(c[0], c[1], zoom)), coords)
+    tiles = parallel_map(lambda c: (c, opentopo_tile(c[0], c[1], zoom)), coords, workers=TOPO_WORKERS)
     for (tx, ty), tile in tiles:
         mosaic.paste(tile, ((tx - tx0) * 256, (ty - ty0) * 256))
     crop = (
@@ -274,9 +371,12 @@ def export_topographic_texture(lo_lo, lo_hi, la_lo, la_hi, out_path):
     texture = ImageEnhance.Brightness(texture).enhance(float(os.environ.get("WEB_TEXTURE_BRIGHT", "0.82")))
     texture = ImageEnhance.Contrast(texture).enhance(float(os.environ.get("WEB_TEXTURE_CONTRAST", "1.16")))
     max_px = int(os.environ.get("WEB_TEXTURE_MAX", "8192"))
-    texture.thumbnail((max_px, max_px), Image.Resampling.LANCZOS)
-    texture.save(out_path.with_name("terrain-topo-raw.png"), optimize=True)
-    texture.save(out_path, optimize=True)
+    if texture.width > max_px or texture.height > max_px:
+        texture.thumbnail((max_px, max_px), Image.Resampling.LANCZOS)
+    raw_path = out_path.with_name("terrain-topo-raw.png")
+    texture.save(raw_path, optimize=True)
+    if raw_path != out_path:
+        shutil.copyfile(raw_path, out_path)
     return zoom
 
 
@@ -342,7 +442,7 @@ def relief_shade(dx, dy, azimuth_deg, altitude_deg=36.0, ambient=0.34):
     return ambient + (1 - ambient) * shade, (normal_x, normal_y, normal_z)
 
 
-def export_relief_textures(heights, width_m, depth_m, out_dir):
+def export_relief_textures(heights, width_m, depth_m, out_dir, pad=0):
     dy, dx = np.gradient(heights, depth_m / (heights.shape[0] - 1), width_m / (heights.shape[1] - 1))
     slope_surface = gaussian_filter(heights, sigma=float(os.environ.get("WEB_SLOPE_SMOOTH", "0.6")))
     slope_dy, slope_dx = np.gradient(
@@ -356,6 +456,17 @@ def export_relief_textures(heights, width_m, depth_m, out_dir):
     shade_stack = [relief_shade(dx, dy, az, altitude_deg=38.0, ambient=0.28)[0] for az in (0, 45, 90, 135, 225, 270, 315)]
     multishade_float = np.mean(shade_stack, axis=0)
     reference_shade = np.clip(0.68 * hillshade_float + 0.32 * multishade_float, 0, 1)
+    # Crop the apron now: every field above used padded neighbours for its
+    # gradient/smoothing, so the visible-edge cells are artifact-free. Saves and
+    # normalization below run on the cropped (visible) grid, matching the mesh.
+    if pad > 0:
+        s = (slice(pad, -pad), slice(pad, -pad))
+        heights = heights[s]
+        slope = slope[s]
+        hillshade_float = hillshade_float[s]
+        multishade_float = multishade_float[s]
+        reference_shade = reference_shade[s]
+        normal_x, normal_y, normal_z = normal_x[s], normal_y[s], normal_z[s]
     # Draped textures are sampled north-up (image top = north) to match the topo
     # tiles and the viewer's UVs. The relief arrays are derived from `heights`,
     # which is south-up (glat runs south->north), so flip every saved image.
@@ -400,7 +511,12 @@ def export_relief_textures(heights, width_m, depth_m, out_dir):
     ]).astype(np.uint8)
     saves.append((normal_rgb, "RGB", "terrain-normal.png"))
 
-    parallel_map(lambda s: Image.fromarray(s[0], s[1]).save(out_dir / s[2], optimize=True), saves, label="encode-relief")
+    parallel_map(
+        lambda s: Image.fromarray(s[0], s[1]).save(out_dir / s[2], optimize=True),
+        saves,
+        label="encode-relief",
+        workers=RELIEF_ENCODE_WORKERS,
+    )
     return {
         "hillshade": hillshade_float,
         "multishade": multishade_float,
@@ -449,29 +565,32 @@ def export_forest_texture(lo_lo, lo_hi, la_lo, la_hi, out_dir, shade):
     try:
         path, width, height = fetch_forest_tcd(lo_lo, lo_hi, la_lo, la_hi)
         with rasterio.open(path) as src:
-            tcd = src.read(1).astype(np.float32)
+            tcd = src.read(1)
     except Exception as exc:
         print(f"  Copernicus tree-cover unavailable, skipping forest layer: {exc}")
         return None
     tcd = tcd[::-1]  # exportImage is north-up; relief arrays/heights are south-up
-    tcd[tcd > 100] = 0.0  # 254/255 = nodata / outside coverage
+    tcd = np.where(tcd <= 100, tcd, 0).astype(np.uint8, copy=False)  # 254/255 = nodata / outside coverage
     # Only real forest reads green: drop canopy below the threshold (scattered trees / meadow look like grass otherwise).
     thresh = float(os.environ.get("WEB_FOREST_MIN_TCD", "50"))
-    d = np.clip((tcd - thresh) / (100.0 - thresh), 0.0, 1.0)
-    cream = np.array([243, 239, 226], dtype=float)
-    g_lo = np.array([120, 162, 104], dtype=float)  # threshold canopy
-    g_hi = np.array([42, 86, 44], dtype=float)  # dense canopy
-    green = g_lo[None, None] + (g_hi - g_lo)[None, None] * d[..., None]
-    vis = np.clip(d * 3.0, 0.0, 1.0)[..., None]  # soft edge near threshold, paper below it
-    rgb = cream[None, None] * (1 - vis) + green * vis
+    canopy = np.arange(101, dtype=np.float32)
+    d_lut = np.clip((canopy - thresh) / (100.0 - thresh), 0.0, 1.0)
+    cream = np.array([243, 239, 226], dtype=np.float32)
+    g_lo = np.array([120, 162, 104], dtype=np.float32)  # threshold canopy
+    g_hi = np.array([42, 86, 44], dtype=np.float32)  # dense canopy
+    green_lut = g_lo[None, :] + (g_hi - g_lo)[None, :] * d_lut[:, None]
+    vis_lut = np.clip(d_lut * 3.0, 0.0, 1.0)[:, None]  # soft edge near threshold, paper below it
+    color_lut = (cream[None, :] * (1 - vis_lut) + green_lut * vis_lut).astype(np.float32)
+    rgb = color_lut[tcd]
     shade_img = Image.fromarray(np.round(np.clip(shade, 0, 1) * 255).astype(np.uint8), "L").resize(
         (width, height), Image.Resampling.BICUBIC
     )
-    factor = (0.55 + 0.62 * (np.asarray(shade_img) / 255.0))[..., None]
-    rgb = np.clip(rgb * factor, 0, 255).astype(np.uint8)
+    factor = (0.55 + 0.62 * (np.asarray(shade_img, dtype=np.float32) / 255.0))[..., None]
+    np.multiply(rgb, factor, out=rgb)
+    rgb = np.clip(rgb, 0, 255).astype(np.uint8)
     # Computed south-up (to align with the shade array); flip to north-up for draping.
     Image.fromarray(np.flipud(rgb), "RGB").save(out_dir / "terrain-forest.png", optimize=True)
-    print(f"  forest: TCD canopy {float((d > 0).mean() * 100):.0f}% of bbox")
+    print(f"  forest: TCD canopy {float((d_lut[tcd] > 0).mean() * 100):.0f}% of bbox")
     return "terrain-forest.png"
 
 
@@ -581,29 +700,71 @@ def build_assets(gpx_path: Path, final_image: Path, angles_image: Path, out_dir:
     cell_m = max(span_w_m, span_h_m) / max(1, grid_size - 1)
     print(f"  grid: {grid_size}x{grid_size}, ~{cell_m:.1f} m/cell over {max(span_w_m, span_h_m) / 1000:.1f} km", flush=True)
 
-    # Overlap the three independent online fetches (each hits a different host):
-    # map tiles + forest warm their caches on background threads while the DEM
-    # downloads and terrain samples on the main thread.
-    bind = otel.context_binder()
-    prefetch_pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
-    prefetch = [
-        prefetch_pool.submit(bind(warm_topo_cache), lo_lo, lo_hi, la_lo, la_hi),
-        prefetch_pool.submit(bind(warm_forest_cache), lo_lo, lo_hi, la_lo, la_hi),
-    ]
-
     glat = np.linspace(la_lo, la_hi, grid_size)
     glon = np.linspace(lo_lo, lo_hi, grid_size)
     LO, LA = np.meshgrid(glon, glat)
+
+    # Edge apron: fetch + sample + process a grid padded with `pad` cells of real
+    # extra DEM on every side, then crop back to grid_size before any output. The
+    # visible-edge cells then get full gradient/gaussian stencils (real neighbours
+    # instead of reflected), so relief and mesh edges come out clean.
+    pad = int(os.environ.get("WEB_EDGE_PAD", "8"))
+    dlat = (la_hi - la_lo) / max(1, grid_size - 1)
+    dlon = (lo_hi - lo_lo) / max(1, grid_size - 1)
+    p_la_lo, p_la_hi = la_lo - pad * dlat, la_hi + pad * dlat
+    p_lo_lo, p_lo_hi = lo_lo - pad * dlon, lo_hi + pad * dlon
+    p_grid = grid_size + 2 * pad
+    # pad is in the cache key: a padded fetch covers a larger bbox.
+    bbox_key = f"{bbox_key}_p{pad}"
+    p_glat = np.linspace(p_la_lo, p_la_hi, p_grid)
+    p_glon = np.linspace(p_lo_lo, p_lo_hi, p_grid)
+    LO_p, LA_p = np.meshgrid(p_glon, p_glat)
+
+    # Dependency DAG: all five remote sources are independent downloads (each
+    # needs only the bbox); only the DEM *result* feeds the compute chain. Fire
+    # them all at once and gate each compute on exactly its input. The warm_*
+    # fills are best-effort — the build/export stages below stay authoritative and
+    # re-fetch on a cache miss, so output is identical to the sequential version,
+    # only the I/O now overlaps. (Mirrors the Rust baker's thread::scope DAG.)
+    DEFAULT_CACHE.mkdir(parents=True, exist_ok=True)
+    dem_mode = os.environ.get("WEB_DEM_SOURCE", "mixed").lower()
+    bind = otel.context_binder()
+    fetch_pool = concurrent.futures.ThreadPoolExecutor(max_workers=5, thread_name_prefix="fetch")
+    f_ign = fetch_pool.submit(bind(warm_ign_cache), p_lo_lo, p_lo_hi, p_la_lo, p_la_hi, bbox_key)
+    f_pie = (
+        fetch_pool.submit(bind(warm_piemonte_cache), p_lo_lo, p_lo_hi, p_la_lo, p_la_hi, bbox_key)
+        if dem_mode != "ign"
+        else None
+    )
+    f_topo = fetch_pool.submit(bind(warm_topo_cache), lo_lo, lo_hi, la_lo, la_hi)
+    f_forest = fetch_pool.submit(bind(warm_forest_cache), lo_lo, lo_hi, la_lo, la_hi)
+    f_border = fetch_pool.submit(bind(warm_border_cache), lo_lo, lo_hi, la_lo, la_hi, bbox_key)
+
+    def settle(future):
+        # Best-effort join: the authoritative stage re-fetches on any failure.
+        if future is not None:
+            try:
+                future.result()
+            except Exception:
+                pass
+
     progress(22, "Fetching elevation (DEM)")
-    with otel.span("elevation-source", **{"dem.bbox": bbox_key, "dem.grid": grid_size}):
-        elevation_source = build_elevation_source(lo_lo, lo_hi, la_lo, la_hi, bbox_key)
+    # edge: ign + piemonte -> elevation source (starts as soon as both land,
+    # without waiting on the topo/forest/border downloads).
+    settle(f_ign)
+    settle(f_pie)
+    with otel.span("elevation-source", **{"dem.bbox": bbox_key, "dem.grid": p_grid}):
+        elevation_source = build_elevation_source(p_lo_lo, p_lo_hi, p_la_lo, p_la_hi, bbox_key)
     progress(58, "Sampling route & terrain")
     with otel.span("sample-elevation", **{"dem.source": elevation_source["kind"]}):
-        raw_heights = sample_elevation(LO, LA, lo_lo, lo_hi, la_lo, la_hi, elevation_source)
+        raw_heights = sample_elevation(LO_p, LA_p, p_lo_lo, p_lo_hi, p_la_lo, p_la_hi, elevation_source)
     mesh_smooth = float(os.environ.get("WEB_MESH_SMOOTH", "0.0"))
     relief_smooth = float(os.environ.get("WEB_RELIEF_SMOOTH", "0.10"))
-    heights = raw_heights if mesh_smooth <= 0 else gaussian_filter(raw_heights, sigma=mesh_smooth)
-    relief_heights = heights if relief_smooth <= 0 else gaussian_filter(heights, sigma=relief_smooth)
+    heights_p = raw_heights if mesh_smooth <= 0 else gaussian_filter(raw_heights, sigma=mesh_smooth)
+    relief_p = heights_p if relief_smooth <= 0 else gaussian_filter(heights_p, sigma=relief_smooth)
+    crop = (lambda a: a) if pad <= 0 else (lambda a: a[pad:pad + grid_size, pad:pad + grid_size])
+    heights = crop(heights_p)
+    relief_heights = crop(relief_p)
 
     lat0 = math.radians(float(lat.mean()))
     x0 = R * math.radians(lo_lo) * math.cos(lat0)
@@ -612,6 +773,12 @@ def build_assets(gpx_path: Path, final_image: Path, angles_image: Path, out_dir:
     y_grid = R * np.radians(LA) - y0
     width_m = float(x_grid.max() - x_grid.min())
     depth_m = float(y_grid.max() - y_grid.min())
+    # Padded extents share the visible per-cell spacing, so relief gradients run on
+    # the apron then crop (see edge-apron note above).
+    x_grid_p = R * np.radians(LO_p) * math.cos(lat0) - x0
+    y_grid_p = R * np.radians(LA_p) - y0
+    width_m_p = float(x_grid_p.max() - x_grid_p.min())
+    depth_m_p = float(y_grid_p.max() - y_grid_p.min())
 
     route_step = float(os.environ.get("WEB_ROUTE_STEP_M", "2.0"))
     idx = simplify_by_distance(lat, lon, ele_smooth, target_step=route_step)
@@ -641,12 +808,9 @@ def build_assets(gpx_path: Path, final_image: Path, angles_image: Path, out_dir:
     if angles_image.exists():
         shutil.copyfile(angles_image, out_dir / "angle-sheet.png")
 
-    # Caches are warm from the background prefetch; these stages now read locally.
-    for future in prefetch:
-        future.result()
-    prefetch_pool.shutdown()
-
     progress(70, "Building map textures")
+    # edge: topo tiles -> mosaic
+    settle(f_topo)
     with otel.span("textures"):
         texture_zoom = export_topographic_texture(lo_lo, lo_hi, la_lo, la_hi, out_dir / "terrain-texture.png")
     reference_source = final_image if has_reference_render else out_dir / "terrain-texture.png"
@@ -676,14 +840,19 @@ def build_assets(gpx_path: Path, final_image: Path, angles_image: Path, out_dir:
     height_image = Image.fromarray(quantized, mode="I;16")
     height_image.save(out_dir / "heightmap.png")
     progress(82, "Rendering relief & slope")
-    relief = export_relief_textures(relief_heights, width_m, depth_m, out_dir)
+    relief = export_relief_textures(relief_p, width_m_p, depth_m_p, out_dir, pad=pad)
     if os.environ.get("WEB_BAKE_RELIEF", "0") in {"1", "true", "yes"}:
         # topo texture is north-up; relief["reference"] is south-up — flip to match.
         bake_hillshade_into_topo(out_dir / "terrain-texture.png", np.flipud(relief["reference"]))
     draw_dem_contours(out_dir / "terrain-texture.png", relief_heights)
     progress(90, "Adding forest layer")
+    # edge: forest TCD + relief -> forest layer
+    settle(f_forest)
     forest_texture = export_forest_texture(lo_lo, lo_hi, la_lo, la_hi, out_dir, relief["reference"])
+    # edge: border lines + heights -> border overlay
+    settle(f_border)
     border_count = export_border_overlay(lo_lo, lo_hi, la_lo, la_hi, lat0, x0, y0, heights, bbox_key, out_dir)
+    fetch_pool.shutdown()
     terrain = {
         "gridSize": grid_size,
         "widthM": round(width_m, 2),

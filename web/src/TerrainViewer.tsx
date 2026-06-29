@@ -305,7 +305,7 @@ export function TerrainViewer({
     marker.visible = state.showRoute;
     scene.add(marker);
     markerRef.current = marker;
-    // ponytail: border (France/Italy line) intentionally not rendered — pass null.
+    // border (France/Italy line) intentionally not rendered — pass null.
     const borderGroup = buildBorderGroup(null, assets.terrain, state.verticalExaggeration);
     borderGroup.visible = state.showRoute;
     scene.add(borderGroup);
@@ -380,7 +380,7 @@ export function TerrainViewer({
       const rig = rigRef.current;
       if (rig) {
         if (state.viewMode === "2d") {
-          // ponytail: 2D map = top-down camera preset; reuses the 3D renderer. Rotate+zoom only, no pan.
+          // 2D map = top-down camera preset; reuses the 3D renderer. Rotate+zoom only, no pan.
           rig.phi = 0.06;
           applyRig(camera, rig);
         } else if (cameraModeRef.current === "free-camera") {
@@ -708,7 +708,7 @@ export function TerrainViewer({
       const dy = event.clientY - drag.y;
       draggingRef.current = { x: event.clientX, y: event.clientY };
       if (state.viewMode === "2d") {
-        rig.theta -= dx * 0.006; // ponytail: 2D locks tilt, drag only rotates heading
+        rig.theta -= dx * 0.006; // 2D locks tilt, drag only rotates heading
       } else if (state.cameraMode === "free-camera") {
         rig.theta -= dx * 0.004;
         rig.phi = clamp(rig.phi + dy * 0.003, 0.16, 1.42);

@@ -29,3 +29,6 @@ test-results/
 .env
 .env.*
 !.env.example
+
+# Personal/social drafts (not for the repo)
+docs/linkedin-post.md

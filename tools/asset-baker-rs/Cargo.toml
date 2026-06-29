@@ -1,0 +1,51 @@
+[package]
+name = "ridgeline-asset-baker"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+axum = { version = "0.8", features = ["multipart"] }
+bytes = "1.12"
+hex = "0.4"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
+opentelemetry = "0.31"
+opentelemetry-otlp = { version = "0.31", features = ["http-proto", "reqwest-blocking-client"] }
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"] }
+rayon = "1.11"
+regex = "1.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+thiserror = "2.0"
+tokio = { version = "1.48", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs"] }
+tracing = "0.1"
+tracing-opentelemetry = "0.32"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+url = "2.5"
+ureq = "3.1"
+geojson = "1.0.0"
+gdal = "0.19.0"
+gdal-sys = "0.12.0"
+
+[lib]
+name = "ridgeline_baker"
+path = "src/lib.rs"
+
+[dev-dependencies]
+tempfile = "3.23"
+
+# Dev-build speed: keep OUR crate at opt-level 0 (fast incremental compile) but
+# optimize the heavy dependencies (gdal, image, tokio, …) — they're compiled once
+# and cached, so a debug `baker`/`server` runs close to release speed while edits
+# rebuild in ~1s. Point RIDGELINE_BAKER at target/debug/baker to use it.
+[profile.dev.package."*"]
+opt-level = 2
+
+# Release: cross-crate inlining + single codegen unit for the fastest portable
+# binary. (panic=unwind kept so a panic in one server request doesn't abort the
+# whole process.) Slower to build — the win is per-bake runtime.
+[profile.release]
+lto = true
+codegen-units = 1

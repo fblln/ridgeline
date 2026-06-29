@@ -29,6 +29,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            tools/asset-baker/requirements.txt
+            tools/asset-baker/requirements-dev.txt
       - run: pip install -r tools/asset-baker/requirements.txt -r tools/asset-baker/requirements-dev.txt
       - run: ruff check .
       - run: pytest
+
+  rust-baker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/asset-baker-rs
+    steps:
+      - uses: actions/checkout@v4
+      # libgdal-dev provides gdal-config + headers; gdal-sys 0.12 ships prebuilt
+      # bindings for GDAL 3.4–3.12 and ubuntu-latest's apt GDAL is in that range,
+      # so no bindgen/libclang is needed.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgdal-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/asset-baker-rs
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
