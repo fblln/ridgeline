@@ -25,6 +25,9 @@ web/docs/images/readme/.frames/
 playwright-report/
 test-results/
 
+# Rust build artifacts
+tools/asset-baker-rs/vendor/gdal-sys/prebuilt-bindings/
+
 # Local environment
 .env
 .env.*
